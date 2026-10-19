@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SATx — Trạm đo chỉ số sức khoẻ</title>
+<!-- Font tai san ve cuc bo: tram do thuong dat o phong khong co Internet. -->
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="css/satx.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231E2A24'/%3E%3Cpath d='M5 18h4l2.5-6 3.5 12 3-9 2 3h7' fill='none' stroke='%238FBFA6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══ Thanh trên ══════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand__name">SATx</span>
+      <span class="brand__tagline">Trạm đo chỉ số sức khoẻ</span>
+    </div>
+
+    <div class="topbar__right">
+      <div class="lamps" title="Đèn báo trên máy">
+        <span class="lamp" id="lampRed"></span>
+        <span class="lamp" id="lampGreen"></span>
+        <span class="lamps__label" id="lampLabel">Chưa kết nối</span>
+      </div>
+
+      <span class="divider-v"></span>
+      <span class="clock" id="clock">--:-- · -- tháng --</span>
+
+      <span class="chip" id="linkChip"><span class="chip__dot"></span><span id="linkText">Chưa kết nối</span></span>
+
+      <button class="btn btn--small btn-icon" id="btnSettings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Cài đặt
+      </button>
+    </div>
+  </header>
+
+  <!-- ══ Màn hình đo ═════════════════════════════════════════════════════ -->
+  <main class="view view--active" id="measureView">
+    <div class="measure-grid">
+
+      <!-- Cột trái -->
+      <section style="display:flex; flex-direction:column; gap:20px;">
+
+        <!-- Băng tiến trình, chỉ hiện khi đang đo -->
+        <div class="progress-panel" id="progressPanel" hidden>
+          <div class="progress-panel__head">
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <span class="progress-panel__label" id="progressStepLabel">Đang đo · bước 1 trong 3</span>
+              <span class="progress-panel__title" id="progressTitle">Nhịp tim &amp; nồng độ oxy</span>
+            </div>
+            <div class="progress-panel__eta">
+              <strong id="progressEta">--</strong>
+              <span>còn lại của bước này</span>
+            </div>
+          </div>
+          <div class="progress-bar"><div class="progress-bar__fill" id="progressFill"></div></div>
+          <div class="steps">
+            <div class="step" id="stepPpg">
+              <span class="step__dot"></span><span class="step__name">Nhịp tim &amp; oxy</span>
+              <span class="step__state">chờ</span>
+            </div>
+            <div class="step" id="stepHeight">
+              <span class="step__dot"></span><span class="step__name">Chiều cao</span>
+              <span class="step__state">chờ</span>
+            </div>
+            <div class="step" id="stepWeight">
+              <span class="step__dot"></span><span class="step__name">Cân nặng</span>
+              <span class="step__state">chờ</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tiêu đề kết quả -->
+        <div class="result-head" id="resultHead">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span class="section-label">Kết quả lần đo</span>
+            <span class="result-head__name" id="resultName">Chưa có bệnh nhân</span>
+          </div>
+          <div class="result-head__meta">
+            <span class="chip" id="resultStatus"><span class="chip__dot"></span><span>Chưa đo</span></span>
+            <span class="clock" id="resultTime">--:--:--</span>
+          </div>
+        </div>
+
+        <!-- Bốn chỉ số -->
+        <div class="metrics">
+          <div class="metric metric--empty" id="cardWeight">
+            <div class="metric__body">
+              <span class="metric__label">Cân nặng</span>
+              <span class="metric__value"><span class="metric__number" id="valWeight">— —</span><span class="metric__unit">kg</span></span>
+            </div>
+            <svg class="metric__icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"></path><path d="M7 7V5a5 5 0 0 1 10 0v2"></path><path d="M12 11v5"></path></svg>
+          </div>
+
+          <div class="metric metric--empty" id="cardHeight">
+            <div class="metric__body">
+              <span class="metric__label">Chiều cao</span>
+              <span class="metric__value"><span class="metric__number" id="valHeight">— —</span><span class="metric__unit">cm</span></span>
+            </div>
+            <svg class="metric__icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"></path><path d="M8 5l4-2 4 2"></path><path d="M8 19l4 2 4-2"></path></svg>
+          </div>
+
+          <div class="metric metric--empty" id="cardHeart">
+            <div class="metric__body">
+              <span class="metric__label">Nhịp tim</span>
+              <span class="metric__value"><span class="metric__number" id="valHeart">— —</span><span class="metric__unit">nhịp/phút</span></span>
+            </div>
+            <svg class="metric__icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"></path></svg>
+          </div>
+
+          <div class="metric metric--empty" id="cardSpo2">
+            <div class="metric__body">
+              <span class="metric__label">Nồng độ oxy máu</span>
+              <span class="metric__value"><span class="metric__number" id="valSpo2">— —</span><span class="metric__unit">%</span></span>
+            </div>
+            <svg class="metric__icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 5.7 6 10a6 6 0 0 1-12 0c0-4.3 6-10 6-10z"></path></svg>
+          </div>
+        </div>
+
+        <!-- BMI -->
+        <div class="bmi">
+          <div class="bmi__left">
+            <span class="metric__label">Chỉ số khối cơ thể</span>
+            <span class="bmi__value">
+              <span class="metric__number" id="valBmi">— —</span>
+              <span class="bmi__badge bmi__badge--none" id="bmiBadge">Chưa đo</span>
+            </span>
+          </div>
+          <div class="bmi__scale">
+            <div class="bmi__track">
+              <div class="bmi__bands"><span></span><span></span><span></span><span></span></div>
+              <div class="bmi__marker" id="bmiMarker" style="left: -10px;"></div>
+            </div>
+            <div class="bmi__legend">
+              <span>Thiếu cân</span><span>Bình thường</span><span>Thừa cân</span><span>Béo phì</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diễn biến -->
+        <div style="display:flex; flex-direction:column; gap:11px; padding-top:3px;">
+          <span class="section-label">Diễn biến phiên đo</span>
+          <div class="timeline" id="timeline">
+            <div class="timeline__row">
+              <span class="timeline__time">--:--:--</span>
+              <span class="timeline__dot"></span>
+              <span class="timeline__text">Chưa có hoạt động nào.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cột phải -->
+      <aside style="display:flex; flex-direction:column; gap:18px;">
+
+        <section class="card">
+          <div class="card__head">
+            <h2 class="card__title">Thông tin bệnh nhân</h2>
+            <span class="badge" id="patientSource" hidden>Từ QR</span>
+          </div>
+          <div class="field">
+            <label for="fName">Họ và tên</label>
+            <input id="fName" placeholder="Nguyễn Văn A" autocomplete="off">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="fGender">Giới tính</label>
+              <select id="fGender">
+                <option value="">—</option>
+                <option>Nam</option>
+                <option>Nữ</option>
+                <option>Khác</option>
+              </select>
+            </div>
+            <div class="field field--mono">
+              <label for="fDob">Ngày sinh</label>
+              <input id="fDob" placeholder="dd/mm/yyyy" autocomplete="off">
+            </div>
+          </div>
+          <div class="field field--mono">
+            <label for="fId">Số CCCD</label>
+            <input id="fId" placeholder="0480xxxxxxxx" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fAddress">Địa chỉ</label>
+            <input id="fAddress" placeholder="Số nhà, phường/xã, tỉnh/thành" autocomplete="off">
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2 class="card__title">Quét QR trên CCCD</h2>
+            <span class="chip" id="camChip"><span class="chip__dot"></span><span id="camText">Camera tắt</span></span>
+          </div>
+          <div class="cam" id="cam">
+            <div class="cam__idle" id="camIdle"></div>
+            <video id="camVideo" autoplay muted playsinline hidden></video>
+            <canvas id="camCanvas" hidden></canvas>
+            <div class="cam__frame">
+              <span class="cam__corner cam__corner--tl"></span>
+              <span class="cam__corner cam__corner--tr"></span>
+              <span class="cam__corner cam__corner--bl"></span>
+              <span class="cam__corner cam__corner--br"></span>
+              <span class="cam__scan" id="camScan" hidden></span>
+            </div>
+            <span class="cam__hint" id="camHint">Đưa mặt sau thẻ vào khung</span>
+          </div>
+          <button class="btn btn--dark" id="btnScan">Bật camera quét</button>
+        </section>
+      </aside>
+    </div>
+
+    <!-- Thanh hành động -->
+    <footer class="actionbar">
+      <button class="btn btn--primary" id="btnMeasure" disabled>Bắt đầu đo</button>
+      <button class="btn" id="btnReset">Đo lại</button>
+      <button class="btn" id="btnClearReading">Xoá lần đo</button>
+      <span class="divider-v" style="margin: 0 7px;"></span>
+      <button class="btn" id="btnPdf">Xuất PDF</button>
+      <button class="btn" id="btnHistory">Lịch sử</button>
+      <span class="actionbar__note" id="footerNote">Dữ liệu chỉ lưu trong phiên này</span>
+    </footer>
+  </main>
+
+  <!-- ══ Màn hình lịch sử ════════════════════════════════════════════════ -->
+  <section class="view" id="historyView">
+    <div class="history-head">
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <h1>Lịch sử phiên làm việc</h1>
+        <span class="history-head__sub" id="historySub">Chưa có lần đo nào</span>
+      </div>
+      <div class="history-head__tools">
+        <div class="segmented" id="historyFilter">
+          <button data-filter="all" aria-pressed="true">Tất cả</button>
+          <button data-filter="live" aria-pressed="false">Trực tiếp</button>
+          <button data-filter="eeprom" aria-pressed="false">Từ bộ đệm</button>
+        </div>
+        <button class="btn btn--small" id="btnCsv">Xuất CSV</button>
+        <button class="btn btn--small btn--dark" id="btnBackToMeasure">← Về màn hình đo</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Người đo</th>
+            <th class="num">Cân nặng</th>
+            <th class="num">Chiều cao</th>
+            <th class="num">Nhịp tim</th>
+            <th class="num">Oxy</th>
+            <th class="num">BMI</th>
+            <th>Thời gian</th>
+            <th>Nguồn</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+
+    <div style="padding: 18px 40px 26px;">
+      <div class="note note--warn" id="bufferNote" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+        <span id="bufferNoteText"></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══ Hộp cài đặt ═══════════════════════════════════════════════════════ -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal__head">
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <h2 class="modal__title" id="settingsTitle">Cài đặt kết nối &amp; hiệu chuẩn</h2>
+        <span class="modal__sub">Máy luôn ưu tiên cáp USB. WiFi nằm chờ sẵn và tự nhận việc khi cáp rớt.</span>
+      </div>
+      <button class="modal__close" id="btnCloseSettings" aria-label="Đóng">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <div class="flow">
+      <span class="flow__pill">Cáp USB</span>
+      <svg width="30" height="12" viewBox="0 0 30 12" fill="none" stroke="#8FBFA6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 6h26M22 2l5 4-5 4"></path></svg>
+      <span class="flow__text">mất tín hiệu quá 3 giây</span>
+      <svg width="30" height="12" viewBox="0 0 30 12" fill="none" stroke="#8FBFA6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 6h26M22 2l5 4-5 4"></path></svg>
+      <span class="flow__pill flow__pill--alt">WiFi</span>
+      <span class="flow__note">chuyển kênh dưới 2 giây</span>
+    </div>
+
+    <div class="modal__grid">
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">Cáp USB</h3>
+          <span class="chip" id="uartChip"><span class="chip__dot"></span><span id="uartChipText">Chưa nối</span></span>
+        </div>
+        <div class="field field--mono">
+          <label for="uartPortLabel">Cổng</label>
+          <input id="uartPortLabel" value="Chưa chọn" disabled>
+        </div>
+        <div class="field-row">
+          <div class="field field--mono">
+            <label for="uartBaud">Tốc độ</label>
+            <select id="uartBaud">
+              <option>115200</option>
+              <option>57600</option>
+              <option>9600</option>
+            </select>
+          </div>
+          <div class="field field--mono">
+            <label for="uartFrame">Khung truyền</label>
+            <input id="uartFrame" value="8N1" disabled>
+          </div>
+        </div>
+        <div style="display:flex; gap:9px; margin-top:auto;">
+          <button class="btn btn--small btn--dark" style="flex-grow:1;" id="btnConnectUart">Chọn cổng</button>
+          <button class="btn btn--small" style="flex-grow:1;" id="btnDisconnect">Ngắt</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">WiFi dự phòng</h3>
+          <span class="chip" id="wifiChip"><span class="chip__dot"></span><span id="wifiChipText">Chờ sẵn</span></span>
+        </div>
+        <div class="field">
+          <label for="wifiSsid">Tên mạng</label>
+          <input id="wifiSsid" placeholder="Tên WiFi phòng lab" autocomplete="off">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="wifiPass">Mật khẩu</label>
+            <input id="wifiPass" type="password" placeholder="••••••••" autocomplete="off">
+          </div>
+          <div class="field field--mono">
+            <label for="wifiHost">Địa chỉ máy</label>
+            <input id="wifiHost" value="satx.local" autocomplete="off">
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:auto;">
+          <button class="btn btn--small" style="flex-grow:1;" id="btnSaveWifi">Lưu và thử kết nối</button>
+          <span class="cell-mono" id="wifiIp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal__grid">
+      <div class="card">
+        <h3 class="card__title">Hiệu chuẩn</h3>
+        <div class="kv"><span class="kv__key">Hệ số cân</span><span class="kv__value" id="calScale">—</span></div>
+        <div class="kv"><span class="kv__key">Cao lắp cảm biến</span><span class="kv__value" id="calMount">—</span></div>
+        <div class="field-row">
+          <div class="field field--mono">
+            <label for="calKnownKg">Quả cân chuẩn (kg)</label>
+            <input id="calKnownKg" value="5" inputmode="decimal">
+          </div>
+          <div class="field field--mono">
+            <label for="calMountCm">Cao lắp (cm)</label>
+            <input id="calMountCm" value="200" inputmode="decimal">
+          </div>
+        </div>
+        <div style="display:flex; gap:9px;">
+          <button class="btn btn--small" style="flex-grow:1;" id="btnTare">Trừ bì</button>
+          <button class="btn btn--small" style="flex-grow:1;" id="btnCalWeight">Đặt hệ số</button>
+          <button class="btn btn--small" style="flex-grow:1;" id="btnCalHeight">Đặt cao lắp</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card__title">Nguồn dữ liệu</h3>
+        <div class="segmented" id="transportPicker">
+          <button data-transport="uart" aria-pressed="true" style="flex-grow:1;">Thiết bị thật</button>
+          <button data-transport="mock" aria-pressed="false" style="flex-grow:1;">Mô phỏng</button>
+        </div>
+        <span style="font-size:12.5px; line-height:1.55; color:var(--ink-soft);">
+          Chế độ mô phỏng chạy được toàn bộ giao diện khi chưa có mạch — dùng để trình bày và kiểm thử.
+        </span>
+        <div id="mockTools" hidden style="display:flex; gap:9px;">
+          <button class="btn btn--tiny" style="flex-grow:1;" id="btnMockDrop">Giả lập rớt kết nối</button>
+          <button class="btn btn--tiny" style="flex-grow:1;" id="btnMockRestore">Nối lại &amp; đẩy bộ đệm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal__actions">
+      <button class="btn btn--small btn--danger" id="btnErase">Xoá sạch bộ đệm trên máy</button>
+      <button class="btn btn--small" style="margin-left:auto;" id="btnCloseSettings2">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="vendor/jsQR.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

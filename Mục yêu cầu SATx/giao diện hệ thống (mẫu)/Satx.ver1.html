@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SATX v1 — Trạm đo chỉ số sức khỏe</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --bg: #E8EEF1;
+    --panel: #FFFFFF;
+    --ink: #10242C;
+    --ink-soft: #4B6470;
+    --navy: #0B2B3C;
+    --navy-2: #14495F;
+    --mint: #2EC4B6;
+    --mint-glow: rgba(46,196,182,0.55);
+    --amber: #E0A458;
+    --amber-glow: rgba(224,164,88,0.5);
+    --red: #D64550;
+    --red-glow: rgba(214,69,80,0.5);
+    --line: #C7D3D8;
+    --line-dark: #1F4A5C;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  #app{ max-width: 1280px; margin: 0 auto; padding: 18px 18px 100px; }
+
+  /* ---------- TOP BAR ---------- */
+  .topbar{
+    background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
+    color: #EAF4F5;
+    border-radius: 14px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    box-shadow: 0 6px 18px rgba(11,43,60,0.25);
+  }
+  .brand{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .brand .ver{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mint);
+    border: 1px solid var(--mint);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .clock{
+    font-family: var(--font-mono);
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    color: #CFE8EA;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 6px 12px;
+  }
+  .conn-status{ display:flex; gap: 16px; margin-left: auto; }
+  .led-group{
+    display:flex; align-items:center; gap:7px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #B9D3D6;
+  }
+  .led{
+    width: 10px; height:10px; border-radius:50%;
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red-glow);
+    display:inline-block;
+    transition: background .25s, box-shadow .25s;
+  }
+  .led.on-mint{ background: var(--mint); box-shadow: 0 0 8px var(--mint-glow); animation: pulse 1.6s infinite; }
+  .led.on-amber{ background: var(--amber); box-shadow: 0 0 8px var(--amber-glow); }
+  .led.on-red{ background: var(--red); box-shadow: 0 0 8px var(--red-glow); }
+  @keyframes pulse{
+    0%,100%{ opacity:1; } 50%{ opacity:.55; }
+  }
+
+  .icon-btn{
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #EAF4F5;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .icon-btn:hover{ background: rgba(255,255,255,0.16); }
+
+  /* ---------- MAIN VIEW ---------- */
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  #mainView{
+    display: none;
+    grid-template-columns: 1.1fr 1fr 0.9fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  #mainView.active{ display: grid; }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+  }
+  .panel h2{
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: var(--navy-2);
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--line);
+  }
+
+  .field{ margin-bottom: 13px; }
+  .field label{
+    display:block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 5px;
+    letter-spacing: .3px;
+  }
+  .field input, .field select{
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #FBFCFD;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .field input:focus, .field select:focus{
+    outline: none;
+    border-color: var(--mint);
+    box-shadow: 0 0 0 3px rgba(46,196,182,0.15);
+  }
+  .field input[readonly]{ background:#F1F4F5; color: var(--ink-soft); }
+
+  /* readouts (instrument style) */
+  .readout-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .readout{
+    background: linear-gradient(180deg, var(--navy) 0%, #0E3244 100%);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display:flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid var(--line-dark);
+  }
+  .readout.wide{ grid-column: 1 / -1; }
+  .r-label{
+    font-size: 11px;
+    letter-spacing: .8px;
+    color: #8FB3BA;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .r-value{
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 700;
+    color: #58E8D9;
+    text-shadow: 0 0 10px rgba(88,232,217,0.35);
+  }
+  .r-value small{
+    font-size: 12px;
+    font-weight: 500;
+    color: #8FB3BA;
+    margin-left: 4px;
+  }
+  .diagnosis{
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #F1F8F7;
+    border: 1px solid #CDE7E3;
+    font-size: 13px;
+    color: var(--navy-2);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .syslog{
+    margin-top: 12px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    max-height: 70px;
+    overflow-y: auto;
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+  }
+  .syslog div{ padding: 1px 0; }
+
+  /* camera / QR panel */
+  .cam-frame{
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #0B2B3C;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line-dark);
+  }
+  .cam-frame video{ width:100%; height:100%; object-fit: cover; display:block; }
+  .scan-line{
+    position: absolute; left:6%; right:6%; top:0;
+    height: 2px;
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint-glow);
+    animation: scan 2.2s linear infinite;
+    display:none;
+  }
+  .scan-line.active{ display:block; }
+  @keyframes scan{
+    0%{ top: 6%; } 50%{ top: 92%; } 100%{ top: 6%; }
+  }
+  .cam-actions{ margin-top: 12px; display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
+  .hint{ font-size: 12px; color: var(--ink-soft); }
+
+  /* ---------- BUTTONS ---------- */
+  .btn{
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13.5px;
+    padding: 11px 20px;
+    border-radius: 9px;
+    border: none;
+    cursor: pointer;
+    background: var(--navy-2);
+    color: #fff;
+    transition: transform .1s, background .15s;
+  }
+  .btn:hover{ background: var(--navy); }
+  .btn:active{ transform: scale(0.98); }
+  .btn:disabled{ background:#A9B7BC; cursor:not-allowed; }
+  .btn.ghost{
+    background: transparent;
+    border: 1px solid var(--line-dark);
+    color: var(--navy-2);
+  }
+  .btn.ghost:hover{ background: #EEF3F4; }
+  .btn.accent{ background: var(--mint); color: #063834; }
+  .btn.accent:hover{ background: #26B0A3; }
+  .btn.danger{ background: transparent; border:1px solid var(--red); color: var(--red); }
+  .btn.danger:hover{ background: #FCEEEF; }
+
+  /* ---------- ACTION BAR ---------- */
+  .actionbar{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding: 14px 18px;
+    display:flex;
+    gap: 12px;
+    justify-content: center;
+    box-shadow: 0 -4px 14px rgba(11,43,60,0.08);
+    z-index: 30;
+  }
+
+  /* ---------- HISTORY VIEW ---------- */
+  #historyView{ margin-top: 16px; }
+  .history-head{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 14px; }
+  .history-head h2{
+    font-family: var(--font-display);
+    color: var(--navy);
+    font-size: 20px;
+    margin: 0;
+  }
+  .table-wrap{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: auto;
+    max-height: 68vh;
+  }
+  table{ width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th{
+    position: sticky; top:0;
+    background: var(--navy);
+    color: #EAF4F5;
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: .3px;
+    white-space: nowrap;
+  }
+  tbody td{
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  tbody tr:hover{ background: #F5F9FA; }
+  .empty-row td{
+    text-align:center;
+    color: var(--ink-soft);
+    padding: 40px 12px;
+    font-style: italic;
+  }
+
+  /* ---------- MODAL (Settings) ---------- */
+  .modal-overlay{
+    position: fixed; inset:0;
+    background: rgba(11,43,60,0.45);
+    display:none;
+    align-items:center; justify-content:center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal{
+    background: var(--panel);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 24px 26px;
+  }
+  .modal h2{
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--navy);
+    margin: 0 0 4px;
+  }
+  .modal .sub{ font-size: 12.5px; color: var(--ink-soft); margin-bottom: 18px; }
+  .settings-block{
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .settings-block h3{
+    font-size: 13px;
+    margin: 0 0 12px;
+    color: var(--navy-2);
+    display:flex; align-items:center; gap:8px;
+  }
+  .settings-row{ display:flex; gap:10px; margin-bottom: 10px; }
+  .settings-row .field{ flex:1; margin-bottom:0; }
+  .status-line{ font-size: 12px; margin-top: 8px; display:flex; align-items:center; gap:7px; color: var(--ink-soft); }
+  .priority-note{
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    background: #F1F8F7;
+    border: 1px solid #CDE7E3;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top: 4px; }
+
+  @media (max-width: 980px){
+    #mainView.active{ grid-template-columns: 1fr; }
+    .actionbar{ flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">SATX <span class="ver">v1</span></div>
+    <div class="clock" id="clock">--:--:-- --/--/----</div>
+    <div class="conn-status">
+      <div class="led-group"><span class="led" id="ledUart"></span>UART</div>
+      <div class="led-group"><span class="led" id="ledWifi"></span>WiFi</div>
+    </div>
+    <button class="icon-btn" id="btnSettings">⚙ Cài đặt</button>
+  </header>
+
+  <main id="mainView" class="view active">
+
+    <section class="panel patient-panel">
+      <h2>THÔNG TIN BỆNH NHÂN</h2>
+      <div class="field"><label>Họ và tên</label><input id="fName" placeholder="Nguyễn Văn A"></div>
+      <div class="field"><label>Giới tính</label>
+        <select id="fGender">
+          <option value="">--</option>
+          <option value="Nam">Nam</option>
+          <option value="Nữ">Nữ</option>
+        </select>
+      </div>
+      <div class="field"><label>Số CCCD</label><input id="fCccd" placeholder="001xxxxxxxxx"></div>
+      <div class="field"><label>Ngày sinh</label><input id="fDob" placeholder="dd/mm/yyyy"></div>
+      <div class="field"><label>Địa chỉ</label><input id="fAddress" placeholder="Số nhà, phường/xã, tỉnh/thành"></div>
+    </section>
+
+    <section class="panel measure-panel">
+      <h2>THÔNG SỐ ĐO</h2>
+      <div class="readout-grid">
+        <div class="readout"><span class="r-label">Cân nặng</span><span class="r-value" id="vWeight">-- <small>kg</small></span></div>
+        <div class="readout"><span class="r-label">Chiều cao</span><span class="r-value" id="vHeight">-- <small>cm</small></span></div>
+        <div class="readout"><span class="r-label">BMI</span><span class="r-value" id="vBmi">--</span></div>
+        <div class="readout"><span class="r-label">SpO2</span><span class="r-value" id="vSpo2">-- <small>%</small></span></div>
+        <div class="readout wide"><span class="r-label">Nhịp tim</span><span class="r-value" id="vHr">-- <small>bpm</small></span></div>
+      </div>
+      <div class="diagnosis" id="diagBox">Chẩn đoán sơ bộ: chưa có dữ liệu đo.</div>
+      <div class="syslog" id="sysLog"></div>
+    </section>
+
+    <section class="panel cam-panel">
+      <h2>QUÉT QR CCCD</h2>
+      <div class="cam-frame">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas" hidden></canvas>
+        <div class="scan-line" id="scanLine"></div>
+      </div>
+      <div class="cam-actions">
+        <button id="btnScan" class="btn">Quét QR CCCD</button>
+        <span id="scanStatus" class="hint">Camera chưa bật</span>
+      </div>
+    </section>
+
+  </main>
+
+  <section id="historyView" class="view">
+    <div class="history-head">
+      <h2>LỊCH SỬ BỆNH NHÂN</h2>
+      <button id="btnBackHistory" class="btn ghost">← Quay lại màn hình đo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>STT</th><th>Họ và tên</th><th>Giới tính</th><th>CCCD</th><th>Ngày sinh</th>
+            <th>Địa chỉ</th><th>Cân nặng</th><th>Chiều cao</th><th>Nhịp tim</th><th>SpO2</th><th>BMI</th><th>Ngày khám</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr class="empty-row"><td colspan="12">Chưa có dữ liệu bệnh nhân nào được ghi nhận.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="actionbar">
+    <button class="btn accent" id="btnMeasure">Đo</button>
+    <button class="btn ghost" id="btnReset">Reset</button>
+    <button class="btn" id="btnPdf">Xuất PDF</button>
+    <button class="btn ghost" id="btnHistory">Lịch sử</button>
+    <button class="btn danger" id="btnExit">Thoát</button>
+  </footer>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>CÀI ĐẶT KẾT NỐI PHẦN CỨNG</h2>
+    <div class="sub">Thiết lập đường truyền giữa giao diện và khối MCU (ESP32).</div>
+
+    <div class="priority-note">
+      Ưu tiên: <b>UART</b> (USB to TTL CH340) làm đường truyền chính. Khi UART đang hoạt động,
+      WiFi sẽ chuyển sang chế độ <b>Sleep</b>. Nếu UART bị ngắt đột ngột, hệ thống tự động chuyển
+      sang WiFi để không gián đoạn quá trình đo.
+    </div>
+
+    <div class="settings-block">
+      <h3>🔌 Kết nối UART</h3>
+      <div class="settings-row">
+        <div class="field">
+          <label>Tốc độ Baud</label>
+          <select id="uartBaud">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200" selected>115200</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" id="btnConnectUart">Chọn cổng &amp; Kết nối UART</button>
+      <button class="btn ghost" id="btnDisconnectUart">Ngắt kết nối</button>
+      <div class="status-line"><span class="led" id="ledUartModal"></span><span id="uartStatusText">Chưa kết nối</span></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>📶 Kết nối WiFi</h3>
+      <div class="settings-row">
+        <div class="field"><label>Địa chỉ IP ESP32</label><input id="wifiIp" placeholder="192.168.1.50"></div>
+        <div class="field"><label>Cổng (Port)</label><input id="wifiPort" placeholder="81"></div>
+      </div>
+      <button class="btn" id="btnConnectWifi">Kết nối WiFi</button>
+      <button class="btn ghost" id="btnDisconnectWifi">Ngắt kết nối</button>
+      <div class="status-line"><span class="led" id="ledWifiModal"></span><span id="wifiStatusText">Chưa kết nối</span></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnCloseSettings">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============ STATE ============ */
+  const state = {
+    connection: 'none',        // 'none' | 'uart' | 'wifi'
+    uart: { port: null, writer: null, reader: null, connected: false, baud: 115200 },
+    wifi: { socket: null, connected: false, ip: '', port: '' },
+    patient: null,
+    history: [],
+    measuring: false,
+    scanning: false,
+    videoStream: null
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ============ SYSTEM LOG ============ */
+  function log(msg){
+    const box = $('sysLog');
+    const t = new Date().toLocaleTimeString('vi-VN');
+    const line = document.createElement('div');
+    line.textContent = `[${t}] ${msg}`;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+    while (box.children.length > 60) box.removeChild(box.firstChild);
+  }
+
+  /* ============ CLOCK ============ */
+  function tickClock(){
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const date = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
+    $('clock').textContent = `${time} — ${date}`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ============ LED / STATUS HELPERS ============ */
+  function setLed(el, mode){
+    // mode: 'off' | 'active' | 'sleep' | 'error'
+    el.classList.remove('on-mint','on-amber','on-red');
+    if (mode === 'active') el.classList.add('on-mint');
+    else if (mode === 'sleep') el.classList.add('on-amber');
+    else if (mode === 'error') el.classList.add('on-red');
+  }
+
+  function refreshConnectionUI(){
+    const uartLed = $('ledUart'), wifiLed = $('ledWifi');
+    const uartLedModal = $('ledUartModal'), wifiLedModal = $('ledWifiModal');
+
+    if (state.connection === 'uart' && state.uart.connected){
+      setLed(uartLed, 'active'); setLed(uartLedModal, 'active');
+      $('uartStatusText').textContent = `Đã kết nối · ${state.uart.baud} baud (đang hoạt động)`;
+    } else if (state.uart.connected){
+      setLed(uartLed, 'sleep'); setLed(uartLedModal, 'sleep');
+      $('uartStatusText').textContent = `Đã kết nối · ${state.uart.baud} baud (chờ)`;
+    } else {
+      setLed(uartLed, 'off'); setLed(uartLedModal, 'off');
+      $('uartStatusText').textContent = 'Chưa kết nối';
+    }
+
+    if (state.connection === 'wifi' && state.wifi.connected){
+      setLed(wifiLed, 'active'); setLed(wifiLedModal, 'active');
+      $('wifiStatusText').textContent = `Đã kết nối ${state.wifi.ip}:${state.wifi.port} (đang hoạt động)`;
+    } else if (state.wifi.connected){
+      setLed(wifiLed, 'sleep'); setLed(wifiLedModal, 'sleep');
+      $('wifiStatusText').textContent = `Đã kết nối ${state.wifi.ip}:${state.wifi.port} (Sleep — chờ UART)`;
+    } else {
+      setLed(wifiLed, 'off'); setLed(wifiLedModal, 'off');
+      $('wifiStatusText').textContent = 'Chưa kết nối';
+    }
+  }
+  refreshConnectionUI();
+
+  /* ============ UART (Web Serial API) ============ */
+  async function connectUart(){
+    if (!('serial' in navigator)){
+      log('Trình duyệt không hỗ trợ Web Serial API (UART). Hãy dùng Chrome/Edge trên máy tính.');
+      alert('Trình duyệt này không hỗ trợ kết nối UART qua Web Serial API.\nVui lòng dùng Google Chrome hoặc Microsoft Edge trên máy tính, hoặc dùng WiFi thay thế.');
+      return;
+    }
+    try{
+      const baud = parseInt($('uartBaud').value, 10);
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: baud });
+      state.uart.port = port;
+      state.uart.baud = baud;
+      state.uart.connected = true;
+      state.uart.writer = port.writable.getWriter();
+
+      port.addEventListener('disconnect', onUartSuddenDisconnect);
+
+      if (state.connection !== 'wifi' || !state.wifi.connected){
+        state.connection = 'uart';
+      }
+      log(`UART đã kết nối (${baud} baud). Ưu tiên sử dụng UART.`);
+      refreshConnectionUI();
+    } catch(err){
+      log('Kết nối UART thất bại: ' + err.message);
+    }
+  }
+
+  async function disconnectUart(){
+    try{
+      if (state.uart.writer){ await state.uart.writer.close().catch(()=>{}); }
+      if (state.uart.port){ await state.uart.port.close().catch(()=>{}); }
+    } catch(e){ /* ignore */ }
+    state.uart.port = null;
+    state.uart.writer = null;
+    state.uart.connected = false;
+    if (state.connection === 'uart'){
+      state.connection = state.wifi.connected ? 'wifi' : 'none';
+    }
+    log('Đã ngắt kết nối UART.');
+    refreshConnectionUI();
+  }
+
+  function onUartSuddenDisconnect(){
+    log('⚠ UART bị ngắt đột ngột! Tự động chuyển sang WiFi (nếu đã cấu hình).');
+    state.uart.connected = false;
+    state.uart.port = null;
+    state.uart.writer = null;
+    if (state.wifi.connected){
+      state.connection = 'wifi';
+    } else {
+      state.connection = 'none';
+    }
+    refreshConnectionUI();
+  }
+
+  async function uartSend(payload){
+    if (!state.uart.connected || !state.uart.writer) throw new Error('UART chưa kết nối');
+    const data = new TextEncoder().encode(payload + '\n');
+    await state.uart.writer.write(data);
+  }
+
+  /* ============ WiFi (WebSocket to ESP32) ============ */
+  function connectWifi(){
+    const ip = $('wifiIp').value.trim();
+    const port = $('wifiPort').value.trim();
+    if (!ip || !port){
+      alert('Vui lòng nhập đầy đủ địa chỉ IP và cổng của ESP32.');
+      return;
+    }
+    try{
+      const socket = new WebSocket(`ws://${ip}:${port}/`);
+      socket.onopen = () => {
+        state.wifi.socket = socket;
+        state.wifi.connected = true;
+        state.wifi.ip = ip;
+        state.wifi.port = port;
+        if (!state.uart.connected) state.connection = 'wifi';
+        log(`WiFi đã kết nối tới ${ip}:${port}.`);
+        refreshConnectionUI();
+      };
+      socket.onerror = () => {
+        log(`Kết nối WiFi tới ${ip}:${port} thất bại.`);
+      };
+      socket.onclose = () => {
+        state.wifi.connected = false;
+        state.wifi.socket = null;
+        if (state.connection === 'wifi') state.connection = state.uart.connected ? 'uart' : 'none';
+        log('WiFi đã ngắt kết nối.');
+        refreshConnectionUI();
+      };
+    } catch(err){
+      log('Lỗi khởi tạo WiFi: ' + err.message);
+    }
+  }
+
+  function disconnectWifi(){
+    if (state.wifi.socket) state.wifi.socket.close();
+    state.wifi.connected = false;
+    state.wifi.socket = null;
+    if (state.connection === 'wifi') state.connection = state.uart.connected ? 'uart' : 'none';
+    refreshConnectionUI();
+  }
+
+  function wifiSend(payload){
+    return new Promise((resolve, reject) => {
+      if (!state.wifi.connected || !state.wifi.socket) return reject(new Error('WiFi chưa kết nối'));
+      try{
+        state.wifi.socket.send(payload);
+        resolve();
+      } catch(err){ reject(err); }
+    });
+  }
+
+  /* ============ MEASURE (Đo) — with UART -> WiFi failover ============ */
+  async function sendMeasureCommand(){
+    // Priority 1: UART
+    if (state.uart.connected){
+      try{
+        await uartSend('CMD:MEASURE');
+        state.connection = 'uart';
+        log('Đã gửi lệnh ĐO qua UART.');
+        refreshConnectionUI();
+        return 'uart';
+      } catch(err){
+        log('Gửi lệnh qua UART thất bại (' + err.message + '). Chuyển sang WiFi...');
+        state.uart.connected = false;
+      }
+    }
+    // Priority 2: WiFi fallback
+    if (state.wifi.connected){
+      try{
+        await wifiSend('CMD:MEASURE');
+        state.connection = 'wifi';
+        log('Đã gửi lệnh ĐO qua WiFi (dự phòng).');
+        refreshConnectionUI();
+        return 'wifi';
+      } catch(err){
+        log('Gửi lệnh qua WiFi cũng thất bại: ' + err.message);
+      }
+    }
+    log('Không có kết nối phần cứng nào khả dụng — chạy ở chế độ giả lập (demo).');
+    return 'demo';
+  }
+
+  function computeBmiAndDiagnosis(weightKg, heightCm, spo2, hr){
+    const h = heightCm / 100;
+    const bmi = h > 0 ? (weightKg / (h*h)) : 0;
+    let bmiNote;
+    if (bmi < 18.5) bmiNote = 'Thiếu cân';
+    else if (bmi < 23) bmiNote = 'Bình thường';
+    else if (bmi < 25) bmiNote = 'Thừa cân';
+    else bmiNote = 'Béo phì';
+
+    let hrNote = (hr >= 60 && hr <= 100) ? 'nhịp tim bình thường' : 'nhịp tim bất thường, cần theo dõi thêm';
+    let spo2Note = (spo2 >= 95) ? 'SpO2 trong ngưỡng an toàn' : 'SpO2 thấp hơn ngưỡng khuyến nghị, cần theo dõi thêm';
+
+    return {
+      bmi: bmi.toFixed(1),
+      text: `Chẩn đoán sơ bộ: BMI ${bmi.toFixed(1)} (${bmiNote}); ${hrNote}; ${spo2Note}.`
+    };
+  }
+
+  async function doMeasure(){
+    if (state.measuring) return;
+    state.measuring = true;
+    const btn = $('btnMeasure');
+    btn.disabled = true;
+    btn.textContent = 'Đang đo...';
+
+    const via = await sendMeasureCommand();
+
+    // Simulate the acquisition delay while MCU (ESP32) reads MAX30102 / HX711 / HC-SR04
+    await new Promise(r => setTimeout(r, 1400));
+
+    // Mock measured values (in real deployment these arrive from UART/WiFi as CMD:DATA payloads)
+    const weight = +(45 + Math.random()*40).toFixed(1);
+    const height = Math.round(150 + Math.random()*35);
+    const spo2 = Math.round(94 + Math.random()*6);
+    const hr = Math.round(58 + Math.random()*45);
+
+    $('vWeight').innerHTML = `${weight} <small>kg</small>`;
+    $('vHeight').innerHTML = `${height} <small>cm</small>`;
+    $('vSpo2').innerHTML = `${spo2} <small>%</small>`;
+    $('vHr').innerHTML = `${hr} <small>bpm</small>`;
+
+    const { bmi, text } = computeBmiAndDiagnosis(weight, height, spo2, hr);
+    $('vBmi').textContent = bmi;
+    $('diagBox').textContent = text;
+
+    state.patient = {
+      name: $('fName').value || '(chưa nhập)',
+      gender: $('fGender').value || '--',
+      cccd: $('fCccd').value || '--',
+      dob: $('fDob').value || '--',
+      address: $('fAddress').value || '--',
+      weight, height, spo2, hr, bmi,
+      diagnosis: text,
+      examDate: new Date().toLocaleString('vi-VN')
+    };
+
+    log(`Nhận dữ liệu đo qua ${via === 'demo' ? 'chế độ giả lập' : via.toUpperCase()}: Cân nặng ${weight}kg, Cao ${height}cm, SpO2 ${spo2}%, Nhịp tim ${hr}bpm.`);
+
+    addToHistory(state.patient);
+
+    btn.disabled = false;
+    btn.textContent = 'Đo';
+    state.measuring = false;
+  }
+
+  /* ============ RESET ============ */
+  function resetForm(){
+    ['fName','fCccd','fDob','fAddress'].forEach(id => $(id).value = '');
+    $('fGender').value = '';
+    $('vWeight').innerHTML = '-- <small>kg</small>';
+    $('vHeight').innerHTML = '-- <small>cm</small>';
+    $('vBmi').textContent = '--';
+    $('vSpo2').innerHTML = '-- <small>%</small>';
+    $('vHr').innerHTML = '-- <small>bpm</small>';
+    $('diagBox').textContent = 'Chẩn đoán sơ bộ: chưa có dữ liệu đo.';
+    state.patient = null;
+    log('Đã reset giao diện, sẵn sàng cho bệnh nhân tiếp theo.');
+  }
+
+  /* ============ HISTORY ============ */
+  function addToHistory(p){
+    state.history.push(p);
+    renderHistory();
+  }
+
+  function renderHistory(){
+    const body = $('historyBody');
+    body.innerHTML = '';
+    if (state.history.length === 0){
+      body.innerHTML = '<tr class="empty-row"><td colspan="12">Chưa có dữ liệu bệnh nhân nào được ghi nhận.</td></tr>';
+      return;
+    }
+    state.history.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${i+1}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.gender)}</td>
+        <td>${escapeHtml(p.cccd)}</td><td>${escapeHtml(p.dob)}</td><td>${escapeHtml(p.address)}</td>
+        <td>${p.weight}</td><td>${p.height}</td><td>${p.hr}</td><td>${p.spo2}</td><td>${p.bmi}</td>
+        <td>${p.examDate}</td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  /* ============ PDF EXPORT ============ */
+  function exportPdf(){
+    if (!state.patient){
+      alert('Chưa có dữ liệu đo. Vui lòng thực hiện đo trước khi xuất PDF.');
+      return;
+    }
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF){
+      alert('Không tải được thư viện xuất PDF. Vui lòng kiểm tra kết nối mạng.');
+      return;
+    }
+    const p = state.patient;
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('KET QUA KHAM SUC KHOE - SATX', 105, y, { align: 'center' });
+    y += 12;
+    doc.setFontSize(11);
+    const lines = [
+      `Ho va ten: ${p.name}`,
+      `Gioi tinh: ${p.gender}      Ngay sinh: ${p.dob}`,
+      `So CCCD: ${p.cccd}`,
+      `Dia chi: ${p.address}`,
+      '',
+      `Can nang: ${p.weight} kg`,
+      `Chieu cao: ${p.height} cm`,
+      `BMI: ${p.bmi}`,
+      `SpO2: ${p.spo2} %`,
+      `Nhip tim: ${p.hr} bpm`,
+      '',
+      `Chan doan so bo: ${p.diagnosis.replace('Chẩn đoán sơ bộ: ','')}`,
+      '',
+      `Ngay kham: ${p.examDate}`
+    ];
+    lines.forEach(line => { doc.text(line, 20, y); y += 8; });
+    doc.save(`SATX_${(p.name || 'benh_nhan').replace(/\s+/g,'_')}.pdf`);
+    log('Đã xuất file PDF kết quả khám.');
+  }
+
+  /* ============ QR SCAN (CCCD) ============ */
+  async function startScan(){
+    const video = $('video');
+    const canvas = $('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = $('scanStatus');
+    const scanLine = $('scanLine');
+
+    if (state.scanning){
+      // stop scanning
+      state.scanning = false;
+      scanLine.classList.remove('active');
+      if (state.videoStream){
+        state.videoStream.getTracks().forEach(t => t.stop());
+        state.videoStream = null;
+      }
+      video.srcObject = null;
+      statusEl.textContent = 'Camera đã tắt';
+      $('btnScan').textContent = 'Quét QR CCCD';
+      return;
+    }
+
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      state.videoStream = stream;
+      video.srcObject = stream;
+      state.scanning = true;
+      scanLine.classList.add('active');
+      statusEl.textContent = 'Đang quét mã QR CCCD...';
+      $('btnScan').textContent = 'Dừng quét';
+      requestAnimationFrame(scanLoop);
+    } catch(err){
+      statusEl.textContent = 'Không thể truy cập camera: ' + err.message;
+      log('Lỗi camera: ' + err.message);
+    }
+
+    function scanLoop(){
+      if (!state.scanning) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA){
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (window.jsQR){
+          const code = window.jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data){
+            handleQrResult(code.data);
+            return; // stop loop after successful scan
+          }
+        }
+      }
+      requestAnimationFrame(scanLoop);
+    }
+  }
+
+  function handleQrResult(raw){
+    // Vietnamese CCCD QR format: id|oldId|fullName|dob|sex|address|issueDate
+    const parts = raw.split('|');
+    if (parts.length >= 6){
+      $('fCccd').value = parts[0] || '';
+      $('fName').value = parts[2] || '';
+      const dob = parts[3] || '';
+      $('fDob').value = dob.length === 8 ? `${dob.slice(0,2)}/${dob.slice(2,4)}/${dob.slice(4)}` : dob;
+      $('fGender').value = (parts[4] || '').trim() === 'Nam' ? 'Nam' : ((parts[4]||'').trim() === 'Nữ' ? 'Nữ' : '');
+      $('fAddress').value = parts[5] || '';
+      log('Quét QR CCCD thành công, đã điền thông tin bệnh nhân.');
+    } else {
+      $('fCccd').value = raw;
+      log('Đã quét mã QR nhưng không đúng định dạng CCCD chuẩn — ghi vào ô CCCD.');
+    }
+    $('scanStatus').textContent = 'Quét thành công!';
+    state.scanning = false;
+    $('scanLine').classList.remove('active');
+    if (state.videoStream){
+      state.videoStream.getTracks().forEach(t => t.stop());
+      state.videoStream = null;
+    }
+    $('video').srcObject = null;
+    $('btnScan').textContent = 'Quét QR CCCD';
+  }
+
+  /* ============ VIEW SWITCHING ============ */
+  function showHistory(){
+    $('mainView').classList.remove('active');
+    $('historyView').classList.add('active');
+  }
+  function showMain(){
+    $('historyView').classList.remove('active');
+    $('mainView').classList.add('active');
+  }
+
+  /* ============ EVENT BINDINGS ============ */
+  $('btnMeasure').addEventListener('click', doMeasure);
+  $('btnReset').addEventListener('click', resetForm);
+  $('btnPdf').addEventListener('click', exportPdf);
+  $('btnHistory').addEventListener('click', showHistory);
+  $('btnBackHistory').addEventListener('click', showMain);
+  $('btnScan').addEventListener('click', startScan);
+
+  $('btnSettings').addEventListener('click', () => $('settingsModal').classList.add('active'));
+  $('btnCloseSettings').addEventListener('click', () => $('settingsModal').classList.remove('active'));
+  $('settingsModal').addEventListener('click', (e) => { if (e.target === $('settingsModal')) $('settingsModal').classList.remove('active'); });
+
+  $('btnConnectUart').addEventListener('click', connectUart);
+  $('btnDisconnectUart').addEventListener('click', disconnectUart);
+  $('btnConnectWifi').addEventListener('click', connectWifi);
+  $('btnDisconnectWifi').addEventListener('click', disconnectWifi);
+
+  $('btnExit').addEventListener('click', () => {
+    if (confirm('Bạn có chắc muốn thoát? Hệ thống sẽ ngắt toàn bộ kết nối phần cứng.')){
+      disconnectUart();
+      disconnectWifi();
+      resetForm();
+      log('Đã thoát phiên làm việc.');
+    }
+  });
+
+  log('Hệ thống SATX v1 đã khởi động. Vui lòng cài đặt kết nối phần cứng (UART/WiFi) trước khi đo.');
+})();
+</script>
+
+</body>
+</html>

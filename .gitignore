@@ -1,0 +1,41 @@
+# OS files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Local editor / IDE state
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+
+# Build outputs and dependency caches
+build/
+[Bb]in/
+[Oo]bj/
+.pio/
+node_modules/
+packages/
+*.csproj.user
+*.suo
+
+# Arduino / ESP32 generated binaries
+**/firmware/**/*.bin
+**/firmware/**/*.elf
+**/firmware/**/*.map
+**/firmware/**/*.hex
+**/firmware/**/*.o
+**/firmware/**/*.a
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+!.env.sample
+*.log
+
+# Extracted C# sample is kept; its archive duplicates source, dependencies and builds.
+BVBK.rar
