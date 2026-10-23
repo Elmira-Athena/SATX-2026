@@ -6,7 +6,7 @@
 //      Gui {"t":"ping"} moi 1 giay. Khong thay {"t":"pong"} trong 3 giay thi coi
 //      nhu kenh hien tai da chet:
 //        · dang dung UART -> thu mo WebSocket toi satx.local
-//        · dang dung WiFi -> bao mat ket noi, nhung van de nguoi dung cam lai cap
+//        · dang dung WiFi -> tu thu lai cho den khi ESP32 khoi dong/vao mang lai
 //
 //      Cam lai cap: nguoi dung bam "Kết nối lại" (trinh duyet KHONG cho tu dong
 //      mo cong nghe noi tiep neu khong co cu bam chuot — day la rang buoc bao
@@ -46,14 +46,16 @@ export class Link {
   async connect(kind, options = {}) {
     await this.disconnect();
 
+    let transport;
     const hooks = {
-      onLine: (line) => this.#receive(line),
-      onClosed: () => this.#onTransportClosed(),
+      onLine: (line) => { if (this.#transport === transport) this.#receive(line); },
+      onClosed: () => { if (this.#transport === transport) this.#onTransportClosed(); },
     };
 
-    if (kind === 'uart')      this.#transport = new UartTransport(hooks);
-    else if (kind === 'wifi') this.#transport = new WifiTransport(hooks);
-    else                      this.#transport = new MockTransport(hooks);
+    if (kind === 'uart')      transport = new UartTransport(hooks);
+    else if (kind === 'wifi') transport = new WifiTransport(hooks);
+    else                      transport = new MockTransport(hooks);
+    this.#transport = transport;
 
     const label = kind === 'wifi'
       ? await this.#transport.open({ ...this.#wifiConfig, ...options })
@@ -70,15 +72,16 @@ export class Link {
 
   async disconnect() {
     this.#stopHeartbeat();
+    this.#failingOver = false;
     const transport = this.#transport;
     this.#transport = null;
     await transport?.close();
     if (transport) this.#onStatus?.({ kind: 'none', label: '', connected: false });
   }
 
-  send(command) {
+  async send(command) {
     if (!this.#transport) return false;
-    return this.#transport.send(encode(command)) !== false;
+    return (await this.#transport.send(encode(command))) !== false;
   }
 
   // --- Noi bo -------------------------------------------------------------
@@ -110,22 +113,24 @@ export class Link {
     if (this.#failingOver) return;
     this.#failingOver = true;
 
-    if (this.kind === 'uart') {
+    if (this.kind === 'uart' || this.kind === 'wifi') {
       this.#onStatus?.({
-        kind: 'uart', connected: false, failingOver: true,
-        message: 'Mất tín hiệu qua cáp — đang chuyển sang WiFi…',
+        kind: this.kind, connected: false, failingOver: true,
+        message: 'Mất tín hiệu — đang kết nối lại qua WiFi…',
       });
       try {
         await this.connect('wifi');
         this.#onStatus?.({
           kind: 'wifi', connected: true, label: this.#transport.describe(),
-          message: 'Đã chuyển sang WiFi. Cắm lại cáp để quay về kênh chính.',
+          message: 'Đã kết nối WiFi. Không cần nhập lại tên mạng và mật khẩu.',
         });
       } catch (error) {
         this.#failingOver = false;
+        if (this.kind !== 'wifi') return; // Nguoi dung da bam Ngat hoac chon USB.
+        this.#startHeartbeat();
         this.#onStatus?.({
-          kind: 'none', connected: false,
-          message: `Mất kết nối hoàn toàn. Máy sẽ tự lưu vào bộ đệm. (${error.message})`,
+          kind: 'wifi', connected: false, failingOver: true,
+          message: `Chưa nối được WiFi, sẽ tự thử lại. (${error.message})`,
         });
       }
       return;

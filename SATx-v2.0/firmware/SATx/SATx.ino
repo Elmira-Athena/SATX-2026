@@ -100,9 +100,9 @@ constexpr uint8_t kRows = 2;
 namespace height {
 
 // Muc logic cua chan ECHO khi dang co xung vong ve.
-// PC817 mac kieu cuc gop chung + pull-up SE DAO MUC -> khi do doi thanh LOW.
-// Bat buoc xac minh bang bai test T-HCSR04 truoc khi tin so do. (HW-1)
-constexpr int  kEchoActiveLevel = 1;      // 1 = HIGH, 0 = LOW
+// Theo schematic: PC817 co emitter noi GND, collector keo len 3V3 -> xung LOW.
+// Neu thay PC817 bang mach khong dao muc, doi thanh 1 va thu T-HCSR04. (HW-1)
+constexpr int  kEchoActiveLevel = 0;      // 1 = HIGH, 0 = LOW
 
 constexpr uint32_t kTrigPulseUs    = 10;      // do rong xung kich theo datasheet
 constexpr uint32_t kEchoTimeoutUs  = 30000;   // 30 ms ~ 5 m, du xa
@@ -113,13 +113,13 @@ constexpr uint32_t kSampleGapMs    = 60;      // >= 60 ms de tranh vong doi am
 constexpr float kMinDistanceCm = 2.0f;
 constexpr float kMaxDistanceCm = 400.0f;
 
-// Nguong hop le cua chieu cao nguoi (cm) sau khi quy doi
-constexpr float kMinHeightCm = 50.0f;
+// Cho phep do vat nho va mat can trong (0 cm) tren mo hinh 20 cm.
+constexpr float kMinHeightCm = 0.0f;
 constexpr float kMaxHeightCm = 250.0f;
 
 // Do cao lap cam bien so voi mat san (cm). Gia tri mac dinh khi chua hieu chuan;
 // gia tri that duoc luu trong NVS va chinh tu trang Hieu chuan cua Web UI.
-constexpr float kDefaultMountHeightCm = 200.0f;
+constexpr float kDefaultMountHeightCm = 20.0f;
 
 // Toc do am thanh: quang duong = thoi_gian_us / 58.0 (cm), da tinh ca duong ve
 constexpr float kUsPerCm = 58.0f;
@@ -139,8 +139,8 @@ constexpr uint32_t kReadTimeoutMs = 1000;
 // Gia tri that nam trong NVS, dat qua {"t":"cal","target":"weight"}.
 constexpr float kDefaultScale = 2852.35f;
 
-// Nguong hop le cua can nang (kg)
-constexpr float kMinWeightKg = 2.0f;
+// Mo hinh can vat nho: chap nhan ca 0 kg va vat nhe hon 2 kg.
+constexpr float kMinWeightKg = 0.0f;
 constexpr float kMaxWeightKg = 250.0f;
 
 }  // namespace weight
@@ -554,7 +554,7 @@ void displayShowResult(const MeasurementRecord& r);
 void displayShowError(const char* code);
 void sortAscending(float* values, uint8_t count);
 void heightBegin();
-Status heightReadDistanceOnce(float& distanceCmOut);
+Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut);
 Status heightMeasure(float& heightCmOut);
 void weightBegin();
 void weightSetCalibration(float offset, float scale);
@@ -670,9 +670,9 @@ void setup() {
 // =============================================================================
 
 void loop() {
+  linkUpdate(millis());
+  // Lenh nhan vua co the dat stateEnteredMs: lay moc moi de tranh tru tran so.
   const uint32_t nowMs = millis();
-
-  linkUpdate(nowMs);
   ledsUpdate(nowMs);
 
   // Nut RESET uu tien tuyet doi: bam luc nao cung ve IDLE.
@@ -688,8 +688,8 @@ void loop() {
     case AppState::kSelfTest:
       // Cho cam bien on dinh sau khi cap nguon roi moi cho phep do.
       if (nowMs - stateEnteredMs >= 1500) {
-        // Tare luc khoi dong bu duoc troi cua loadcell. Neu that bai (co nguoi
-        // dang dung tren ban can) thi giu nguyen he so da luu trong NVS.
+        // Tare luc khoi dong: phai de mat can trong. Chi giu offset cu neu HX711
+        // khong doc duoc; firmware khong tu phat hien vat dang nam tren can.
         weightTare();
         emitInfo();
         enterIdle(nowMs);
@@ -1283,7 +1283,7 @@ void heightBegin() {
   heightMountHeightCm = cfg::height::kDefaultMountHeightCm;
 }
 
-Status heightReadDistanceOnce(float& distanceCmOut) {
+Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut) {
   digitalWrite(cfg::pin::kUltrasonicTrig, LOW);
   delayMicroseconds(4);
   digitalWrite(cfg::pin::kUltrasonicTrig, HIGH);
@@ -1291,12 +1291,12 @@ Status heightReadDistanceOnce(float& distanceCmOut) {
   digitalWrite(cfg::pin::kUltrasonicTrig, LOW);
 
   // pulseIn tu cho suon len roi do den suon xuong (hoac nguoc lai neu opto dao).
-  const uint32_t echoUs = pulseIn(cfg::pin::kUltrasonicEcho,
+  echoUsOut = pulseIn(cfg::pin::kUltrasonicEcho,
                                   cfg::height::kEchoActiveLevel ? HIGH : LOW,
                                   cfg::height::kEchoTimeoutUs);
-  if (echoUs == 0) return Status::kTimeout;
+  if (echoUsOut == 0) return Status::kTimeout;
 
-  const float cm = static_cast<float>(echoUs) / cfg::height::kUsPerCm;
+  const float cm = static_cast<float>(echoUsOut) / cfg::height::kUsPerCm;
   if (cm < cfg::height::kMinDistanceCm || cm > cfg::height::kMaxDistanceCm) return Status::kOutOfRange;
 
   distanceCmOut = cm;
@@ -1311,12 +1311,36 @@ Status heightMeasure(float& heightCmOut) {
   return Status::kOk;
 #else
   float samples[cfg::height::kSampleCount];
+  uint32_t echoUs[cfg::height::kSampleCount] = {};
   uint8_t valid = 0;
 
   for (uint8_t i = 0; i < cfg::height::kSampleCount; ++i) {
     float cm = 0.0f;
-    if (isOk(heightReadDistanceOnce(cm))) samples[valid++] = cm;
+    if (isOk(heightReadDistanceOnce(cm, echoUs[i]))) samples[valid++] = cm;
     delay(cfg::height::kSampleGapMs);
+  }
+
+  // Gui ca mau hong truoc khi loc, de phan biet timeout va dao dong ECHO tren web.
+  JsonDocument diagnostic;
+  diagnostic["t"] = "log";
+  diagnostic["lvl"] = "info";
+  diagnostic["sensor"] = "height";
+  diagnostic["mount_cm"] = heightMountHeightCm;
+  diagnostic["valid"] = valid;
+  JsonArray pulses = diagnostic["echo_us"].to<JsonArray>();
+  for (uint8_t i = 0; i < cfg::height::kSampleCount; ++i) pulses.add(echoUs[i]);
+  char pulseText[80];
+  serializeJson(pulses, pulseText, sizeof(pulseText));
+  char detail[192];
+  snprintf(detail, sizeof(detail), "HC-SR04 mount=%.2f cm; echo_us=%s; valid=%u/%u",
+           heightMountHeightCm, pulseText, static_cast<unsigned>(valid),
+           static_cast<unsigned>(cfg::height::kSampleCount));
+  diagnostic["msg"] = detail;
+  const size_t length = serializeJson(diagnostic, g_outBuffer, sizeof(g_outBuffer) - 2);
+  if (length > 0 && length < sizeof(g_outBuffer) - 2) {
+    g_outBuffer[length] = '\n';
+    g_outBuffer[length + 1] = '\0';
+    linkSend(g_outBuffer);
   }
 
   // Can qua nua so mau hop le thi ket qua moi dang tin.

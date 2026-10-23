@@ -19,7 +19,10 @@ constexpr int SERIAL_8N1 = 0;
 namespace hal {
 inline uint32_t nowMs = 0;
 inline std::array<int, 64> gpio = [] { std::array<int, 64> pins{}; pins.fill(HIGH); return pins; }();
-inline uint32_t echoUs = 29 * 58;
+inline uint32_t echoUs = 5 * 58;
+inline std::deque<uint32_t> echoSequence;
+// PC817 tren PCB dao ECHO thanh xung LOW tai GPIO18.
+inline int echoActiveLevel = LOW;
 inline bool hxReady = true;
 inline long hxRaw = 0;
 }
@@ -29,7 +32,13 @@ inline void delayMicroseconds(uint32_t) {}
 inline void pinMode(uint8_t, int) {}
 inline void digitalWrite(uint8_t pin, int level) { hal::gpio[pin] = level; }
 inline int digitalRead(uint8_t pin) { return hal::gpio[pin]; }
-inline uint32_t pulseIn(uint8_t, int, uint32_t) { return hal::echoUs; }
+inline uint32_t pulseIn(uint8_t pin, int level, uint32_t) {
+  if (pin != 18 || level != hal::echoActiveLevel) return 0;
+  if (hal::echoSequence.empty()) return hal::echoUs;
+  const uint32_t duration = hal::echoSequence.front();
+  hal::echoSequence.pop_front();
+  return duration;
+}
 class HardwareSerial {
  public:
   explicit HardwareSerial(int = 0) {}

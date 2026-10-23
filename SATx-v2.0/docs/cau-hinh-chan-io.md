@@ -43,26 +43,29 @@ Hai LED dùng chung điện trở R3 330 Ω xuống GND theo sơ đồ.
 Các điểm dưới đây cần kiểm chứng khi lắp ráp. Đặc biệt, lỗi nguồn có thể chặn cả khởi động
 và nạp firmware, trước khi hệ thống đọc được cảm biến.
 
-### HW-1 — PC817 trên đường ECHO có thể đảo mức
+### HW-1 — PC817 trên đường ECHO đảo mức
 
-Opto ghép quang mắc kiểu cực góp chung kèm điện trở kéo lên sẽ **đảo** tín hiệu: khi HC-SR04
-kéo ECHO lên cao thì chân IO18 lại xuống thấp. Cực tính phụ thuộc cách mắc thực tế trên mạch,
-không đọc được chắc chắn từ bản vẽ.
+Theo PDF, PC817 có emitter (chân 3) nối GND, collector (chân 4) nối IO18 và được R1 4k7
+kéo lên 3,3 V. Cách mắc cực phát chung này **đảo** tín hiệu: khi HC-SR04 kéo ECHO lên cao
+thì chân IO18 xuống thấp. Firmware phải đo xung **LOW** nếu PCB giữ cách mắc này.
 
 Firmware để cực tính thành hằng số:
 
 ```cpp
 // firmware/SATx/SATx.ino
-constexpr int kEchoActiveLevel = 1;   // 1 = HIGH, 0 = LOW
+constexpr int kEchoActiveLevel = 0;   // LOW qua PC817; HIGH = 1 neu mach khong dao
 ```
 
 Bài test `T-HCSR04` trong [bring-up-checklist.md](bring-up-checklist.md) phải xác minh giá trị
-này **trước** khi tin bất kỳ số đo chiều cao nào. Nếu đảo mà không sửa hằng số, `pulseIn()` sẽ
-đo đúng phần **nghỉ** giữa hai xung thay vì đo bề rộng xung — kết quả là một con số nhìn hợp lý
-nhưng hoàn toàn sai.
+này **trước** khi tin bất kỳ số đo chiều cao nào, nhất là khi đã sửa phần ECHO trên PCB.
+Chọn sai cực tính có thể làm `pulseIn()` hết thời gian chờ hoặc đo phần nghỉ thay vì xung
+phản hồi; firmware sẽ bỏ số đo lỗi và gửi `h: null`, khiến web hiển thị `--`.
 
-Ngoài ra PC817 có thời gian tắt khoảng 18 µs, tương ứng sai số khoảng cách ~3 mm. Với phép đo
-chiều cao người thì mức này chấp nhận được.
+Datasheet PC817 ghi thời gian sườn tối đa 18 µs ở điều kiện thử `RL = 100 Ω`,
+`VCE = 2 V`, `IC = 2 mA`. PCB dùng pull-up R1 **4k7**, nên không thể dùng con số đó để
+bảo đảm sai số khoảng cách trên mạch này. Nếu xung bị kéo dài qua opto, cần so dạng xung
+trước/sau PC817 để xác nhận; không suy ra hệ số bù chỉ từ thông số datasheet.
+Nguồn: [datasheet PC817 của Sharp](https://global.sharp/products/device/lineup/data/pdf/datasheet/PC817XxNSZ1B_e.pdf).
 
 ### HW-2 — Có thể xung đột UART0
 

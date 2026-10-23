@@ -51,9 +51,11 @@ Không cần board, không cần cảm biến:
 cd firmware/tests && ./run.sh
 ```
 
-Chạy trực tiếp `SATx.ino` với phần cứng giả lập: **234 kiểm tra**, gồm 133 cho EEPROM + CRC,
-39 cho giao thức JSON-lines và 62 cho chu trình đo/kết nối/NVS ở hai chế độ cảm biến.
+Chạy trực tiếp `SATx.ino` với phần cứng giả lập: **253 kiểm tra**, gồm 133 cho EEPROM + CRC,
+39 cho giao thức JSON-lines và 81 cho chu trình đo/kết nối/NVS ở hai chế độ cảm biến.
 Bộ test này kiểm tra logic; cần thử trên mạch thật để xác nhận số đo và kết nối vật lý.
+
+Kiểm tra gửi cấu hình WiFi qua USB (cần Node.js): `node --test webui/tests/link.test.mjs`.
 
 ## Cấu trúc
 
@@ -98,8 +100,8 @@ hiện khi đọc schematic và kiểm tra phần cứng. Đáng chú ý nhất:
 - **HW-6 (ưu tiên kiểm tra trước khi lắp ESP32):** PDF IO nối net I2C `IO21`/`IO22` vào
   **SD1/SD0** của U1, là chân flash. Cần đo PCB, tách đường nối nhầm nếu có và đấu về
   GPIO21/GPIO22 thật. Lỗi này có thể làm ESP32 không boot khi cắm vào mạch nền.
-- **HW-1**: opto PC817 trên đường ECHO có thể đảo mức. Nếu đảo mà chưa sửa hằng số, phép đo
-  chiều cao cho ra con số trông hợp lý nhưng sai hoàn toàn.
+- **HW-1**: opto PC817 trên đường ECHO đảo mức theo sơ đồ. Firmware mặc định đo xung LOW;
+  nếu sửa sang mạch không đảo mức thì phải đổi cực tính và kiểm tra lại khoảng cách.
 - **HW-2**: DevKit đã có sẵn CH340 trên GPIO1/3, mà schematic thêm connector P3 cũng vào đúng
   hai chân đó. Cắm cả hai cùng lúc là tranh chấp bus.
 

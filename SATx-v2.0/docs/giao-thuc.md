@@ -77,6 +77,14 @@ Cài đặt: [`firmware/SATx/SATx.ino`](../firmware/SATx/SATx.ino).
 
 ## Chuyển kênh UART ↔ WiFi
 
+Tên mạng và mật khẩu WiFi được ghi vào **flash NVS trong ESP32**, namespace `satx`,
+key `wifi_ssid` và `wifi_pass`. Khi bật nguồn hoặc reset, firmware đọc lại hai key này
+và gọi `WiFi.begin()`; không cần nhập lại. Chúng không nằm trong EEPROM lưu kết quả đo.
+
+Nếu ESP32 reset/rút nguồn, kết nối WebSocket cũ sẽ đóng. Khi đang dùng WiFi, web tự thử
+nối lại đến địa chỉ máy đã chọn; **Ngắt tất cả** sẽ dừng việc thử lại. Trong lúc ESP32 chưa
+vào mạng, web có thể báo đang thử kết nối, không có nghĩa là mất cấu hình trong NVS.
+
 ```
 UART_ACTIVE   Giao diện gửi ping mỗi 1 s.
               Không thấy ping trong 3 s ────────────────► UART_LOST

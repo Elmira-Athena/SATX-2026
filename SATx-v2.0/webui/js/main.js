@@ -74,6 +74,11 @@ function handleMessage(message) {
       $('calScale').textContent = message.w_scale !== undefined ? String(message.w_scale) : '—';
       $('calMount').textContent = message.mount_cm !== undefined ? `${message.mount_cm} cm` : '—';
       $('wifiIp').textContent = message.ip || '—';
+      if (message.ip && message.ip !== '0.0.0.0' &&
+          ['', 'satx.local'].includes($('wifiHost').value.trim())) {
+        $('wifiHost').value = message.ip;
+        link.setWifiConfig(message.ip, 81);
+      }
       break;
 
     case 'selftest': {
@@ -268,6 +273,7 @@ function bindSettings() {
   $('btnDisconnect').addEventListener('click', async () => {
     await link.disconnect();
     update({ link: 'none', linkLabel: 'Chưa kết nối' });
+    toast('Đã ngắt tất cả kết nối. Bấm Chuyển sang WiFi để kết nối qua mạng.');
     renderSettingsChips();
   });
 
@@ -275,13 +281,24 @@ function bindSettings() {
     const ssid = $('wifiSsid').value.trim();
     const pass = $('wifiPass').value;
     link.setWifiConfig($('wifiHost').value.trim(), 81);
-    if (ssid) {
-      link.send(Cmd.wifi(ssid, pass));
-      toast('Đã gửi thông tin WiFi xuống máy');
-      log(`Cấu hình WiFi: ${ssid}`, 'ok');
-    } else {
-      await connect('wifi');
+    if (!ssid) {
+      toast('Nhập tên mạng WiFi cần lưu', 'warn');
+      return;
     }
+    if (!link.isOpen || link.kind === 'mock') {
+      toast('Hãy bấm Chọn cổng và kết nối USB với ESP32 trước khi lưu WiFi', 'warn');
+      return;
+    }
+    if (!await link.send(Cmd.wifi(ssid, pass))) {
+      toast('Chưa gửi được cấu hình WiFi. Kiểm tra lại kết nối với ESP32.', 'error');
+      return;
+    }
+    toast('Đã gửi cấu hình WiFi xuống ESP32');
+    log('Đã gửi cấu hình WiFi xuống ESP32', 'ok');
+  });
+  $('btnConnectWifi').addEventListener('click', async () => {
+    link.setWifiConfig($('wifiHost').value.trim(), 81);
+    await connect('wifi');
   });
 
   $('btnTare').addEventListener('click', () => { link.send(Cmd.tare()); toast('Đã gửi lệnh trừ bì'); });

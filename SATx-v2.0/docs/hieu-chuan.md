@@ -18,9 +18,15 @@ Công thức: `kg = (raw_trung_bình − offset) / scale`
 
 Firmware lấy 7 mẫu, bỏ mẫu lớn nhất và nhỏ nhất, lấy trung bình 5 mẫu còn lại làm `offset`.
 
-Lưu ý: firmware **cũng tự trừ bì lúc khởi động** để bù trôi nhiệt của loadcell. Nếu lúc bật máy
-có người đang đứng trên bàn cân thì bước đó thất bại và hệ thống giữ lại giá trị đã lưu trong
-NVS — an toàn, nhưng nên bật máy khi bàn cân trống.
+Lưu ý: firmware **cũng tự trừ bì lúc khởi động** để bù trôi nhiệt của loadcell. Phải bật máy
+khi bàn cân trống: nếu đã đặt điện thoại hoặc vật khác lên, khối lượng đó cũng bị tính vào
+bì và số đo có thể về 0. Firmware chỉ giữ offset cũ khi không đọc được HX711, không tự nhận
+biết có vật đặt trên cân.
+
+Bản dành cho mô hình chấp nhận số đo từ **0 đến 250 kg**, gồm cả vật nhẹ dưới 2 kg như điện
+thoại. Bản đo người trước đây loại mọi số dưới 2 kg nên những vật này hiện `--` dù đã đọc
+được HX711. Việc bỏ ngưỡng 2 kg không thay thế hiệu chuẩn: muốn số đúng phải dùng vật có
+khối lượng đã biết. Ô *Quả cân chuẩn (kg)* dùng đơn vị kg, ví dụ 200 g nhập **0,2**.
 
 ### Bước 2 — Đặt hệ số bằng quả cân chuẩn
 
@@ -50,15 +56,33 @@ Công thức: `chiều cao = độ_cao_lắp_cảm_biến − khoảng_cách_đo
 2. Nhập vào ô *Cao lắp (cm)* trong Cài đặt → Hiệu chuẩn.
 3. Bấm **Đặt cao lắp**.
 
-Giá trị mặc định `200.0 cm` là ước lượng. Dự án mẫu dùng hằng số `20` trong biểu thức
-`20 - khoảng_cách` — đó rõ ràng là giá trị tạm lúc thử trên bàn, không phải chiều cao lắp thật.
+Mô hình hiện tại lắp cảm biến cách mặt cân **20 cm** nên firmware mặc định `20.0 cm`.
+Mặt cân trống cho chiều cao xấp xỉ 0 cm; vật cao 5 cm sẽ cách cảm biến khoảng 15 cm.
+Giá trị 180,2 cm khi mặt cân trống phù hợp với việc dùng nhầm mốc 200 cm: `200 − 19,8 = 180,2`.
+
+**Nạp lại firmware không xoá giá trị hiệu chuẩn cũ trong NVS.** Sau khi nạp bản dành cho
+mô hình, đặt **Cao lắp = 20 cm** và kiểm tra dòng *Cao lắp cảm biến* trên web đã báo 20 cm.
+Nếu sau này lắp để đo người, nhập lại độ cao lắp thật, không dùng 20 cm.
+
+### Khi số đo vật nhỏ bị lệch hoặc dao động
+
+Giữ nguyên cao lắp và vật đo, dùng mặt trên phẳng, đủ rộng, song song mặt cảm biến.
+Trong nhật ký web, mỗi lượt đo thật có dòng `HC-SR04 mount=...; echo_us=[...]; valid=.../5`:
+
+- `echo_us` là 5 độ rộng xung gốc theo thứ tự thu, chưa sắp xếp; `0` nghĩa là timeout.
+- Khoảng cách từng mẫu là `echo_us / 58` cm; H bằng cao lắp trừ trung vị các khoảng cách hợp lệ.
+- `valid` đếm mẫu trong khoảng 2–400 cm. Có 5/5 mẫu hợp lệ chưa chứng minh tín hiệu ổn định.
+
+Số liệu thực nghiệm: cân trống `0,2 / 0,2 / 0,2 cm`, vật cao 4 cm cho `3,2 / 2,1 / 2,2 cm`.
+Các kết quả này chưa đủ để suy ra một hệ số bù tin cậy. Thu nhật ký khi cân trống và khi
+đo lại cùng vật có mặt trên phẳng trước khi bù độ lệch hoặc đổi cách đọc xung.
 
 ### Trước khi tin số đo — kiểm tra cực tính ECHO
 
 Xem cảnh báo **HW-1** trong [cau-hinh-chan-io.md](cau-hinh-chan-io.md). Đường ECHO đi qua opto
-PC817 nên có thể bị đảo mức. Nếu đảo mà chưa sửa `kEchoActiveLevel`, `pulseIn()` sẽ đo đúng
-phần **nghỉ** giữa hai xung thay vì bề rộng xung — cho ra một con số trông hợp lý nhưng sai
-hoàn toàn, và hiệu chuẩn kiểu gì cũng không cứu được.
+PC817 mắc đảo mức theo sơ đồ, nên firmware mặc định `kEchoActiveLevel = 0` (LOW).
+Nếu đã thay phần ECHO bằng mạch không đảo mức thì dùng `1` (HIGH). Chọn sai có thể gây
+timeout hoặc đo phần nghỉ thay vì bề rộng xung; hiệu chuẩn độ cao lắp không sửa được lỗi này.
 
 Cách kiểm tra nhanh: đặt một vật ở khoảng cách đã biết (ví dụ 50 cm) và so số đo thô. Nếu lệch
 xa và không tuyến tính theo khoảng cách thật, hãy đổi `kEchoActiveLevel` sang giá trị còn lại
@@ -67,7 +91,9 @@ rồi nạp lại.
 ### Ngưỡng hợp lệ
 
 Firmware loại bỏ mẫu ngoài khoảng 2–400 cm (giới hạn vật lý của HC-SR04), rồi loại kết quả
-ngoài khoảng 50–250 cm (chiều cao người). Đo 5 lần và lấy **trung vị**, không lấy trung bình —
+ngoài khoảng 0–250 cm (cho phép đo vật nhỏ trong mô hình). Khoảng cách âm hoặc chiều cao âm
+vẫn bị loại; số đo gần 0 có thể dao động do cảm biến và cần chỉnh lại cao lắp theo thực tế.
+Đo 5 lần và lấy **trung vị**, không lấy trung bình —
 trung vị loại được mẫu ngoại lai khi người đo cựa quậy, còn trung bình thì không.
 
 ## Nhịp tim và SpO₂ (MAX30102)

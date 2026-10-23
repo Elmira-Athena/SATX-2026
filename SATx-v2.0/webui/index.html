@@ -322,7 +322,7 @@
         </div>
         <div style="display:flex; gap:9px; margin-top:auto;">
           <button class="btn btn--small btn--dark" style="flex-grow:1;" id="btnConnectUart">Chọn cổng</button>
-          <button class="btn btn--small" style="flex-grow:1;" id="btnDisconnect">Ngắt</button>
+          <button class="btn btn--small" style="flex-grow:1;" id="btnDisconnect">Ngắt tất cả</button>
         </div>
       </div>
 
@@ -345,8 +345,9 @@
             <input id="wifiHost" value="satx.local" autocomplete="off">
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px; margin-top:auto;">
-          <button class="btn btn--small" style="flex-grow:1;" id="btnSaveWifi">Lưu và thử kết nối</button>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:auto;">
+          <button class="btn btn--small" style="flex-grow:1;" id="btnSaveWifi">Lưu WiFi vào máy</button>
+          <button class="btn btn--small" style="flex-grow:1;" id="btnConnectWifi">Chuyển sang WiFi</button>
           <span class="cell-mono" id="wifiIp">—</span>
         </div>
       </div>
@@ -364,7 +365,7 @@
           </div>
           <div class="field field--mono">
             <label for="calMountCm">Cao lắp (cm)</label>
-            <input id="calMountCm" value="200" inputmode="decimal">
+            <input id="calMountCm" value="20" inputmode="decimal">
           </div>
         </div>
         <div style="display:flex; gap:9px;">

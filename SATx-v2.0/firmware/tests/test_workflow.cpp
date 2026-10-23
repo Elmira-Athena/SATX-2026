@@ -51,7 +51,7 @@ int main() {
   CHECK(isOk(storeReadAt(0, stored)) && stored.isComplete() && stored.has(flag::kTimeValid),
         "ket qua offline phai giu cac co va thoi gian");
 #if !SATX_SIMULATE_SENSORS
-  CHECK(fabsf(stored.weightKg - 62.4f) < 0.01f && fabsf(stored.heightCm - 171.0f) < 0.1f,
+  CHECK(fabsf(stored.weightKg - 62.4f) < 0.01f && fabsf(stored.heightCm - 15.0f) < 0.1f,
         "he so can va quy doi sieu am phai giu nguyen");
 #endif
   Command reset;
@@ -165,6 +165,116 @@ int main() {
   CHECK(clockNowEpoch(984) == 1001, "dong ho phai dung qua vong tran millis");
   clockSync(0, 0);
   CHECK(!clockValid && clockNowEpoch(1234) == 0, "chua dong bo thi khong gia thoi gian");
+#if !SATX_SIMULATE_SENSORS
+  // Xung LOW qua PC817: 2900 us = 50 cm, cao lap 200 cm -> nguoi cao 150 cm.
+  heightMountHeightCm = 200.0f;
+  hal::echoUs = 2900;
+  float measuredHeight = 0.0f;
+  CHECK(isOk(heightMeasure(measuredHeight)) && fabsf(measuredHeight - 150.0f) < 0.1f,
+        "ECHO dao qua PC817 phai do duoc chieu cao 150 cm");
+  record = MeasurementRecord{};
+  stepHeight(millis());
+  char resultJson[512];
+  encodeResult(resultJson, sizeof(resultJson), record, RecordSource::kLive);
+  CHECK(record.has(flag::kHeightValid) && std::string(resultJson).find("\"h\":150.0") != std::string::npos,
+        "so do chieu cao hop le phai duoc gui cho web");
+
+  hal::echoUs = 0;
+  record = MeasurementRecord{};
+  record.weightKg = 62.4f;
+  record.set(flag::kWeightValid, true);
+  stepHeight(millis());
+  encodeResult(resultJson, sizeof(resultJson), record, RecordSource::kLive);
+  CHECK(!record.has(flag::kHeightValid) && record.has(flag::kWeightValid) &&
+        std::string(resultJson).find("\"h\":null") != std::string::npos,
+        "mat ECHO phai gui h null va giu chi so khac");
+
+  hal::echoUs = 17400; // 300 cm, lon hon cao lap 200 cm.
+  CHECK(heightMeasure(measuredHeight) == Status::kOutOfRange,
+        "khoang cach vuot cao lap khong duoc thanh chieu cao hop le");
+
+  // Mo hinh that: cam bien cach mat can 20 cm, do vat nho thay vi nguoi.
+  g_prefs.floats.erase("h_mount");
+  settingsBegin();
+  heightMountHeightCm = settingsMountHeightCm;
+  hal::echoUs = 1160; // Mat can trong: khoang cach 20 cm.
+  CHECK(isOk(heightMeasure(measuredHeight)) && fabsf(measuredHeight) < 0.01f,
+        "mo hinh mac dinh 20 cm phai cho chieu cao 0 khi mat can trong");
+
+  heightMountHeightCm = 20.0f;
+  hal::echoUs = 870; // Khoang cach 15 cm -> vat cao 5 cm.
+  CHECK(isOk(heightMeasure(measuredHeight)) && fabsf(measuredHeight - 5.0f) < 0.01f,
+        "vat cao 5 cm khong duoc bi loai boi nguong do nguoi 50 cm");
+
+  hal::echoUs = 1148; // Khoang cach 19.79 cm -> chieu cao gan 0.2 cm.
+  CHECK(isOk(heightMeasure(measuredHeight)) && fabsf(measuredHeight - 0.2f) < 0.02f,
+        "mat can cach gan 20 cm khong duoc hien chieu cao 180.2 cm");
+
+  // Giu tung xung theo thu tu doc de chan doan dao dong cua vat nho tren web.
+  linkState = LinkState::kUartActive;
+  Serial.outgoing.clear();
+  hal::echoSequence = {974, 1038, 1032, 1150, 1148};
+  CHECK(isOk(heightMeasure(measuredHeight)) && fabsf(measuredHeight - 2.10345f) < 0.001f,
+        "nhat ky khong duoc thay doi trung vi va tu bu sai so chieu cao");
+  JsonDocument diagnostic;
+  CHECK(deserializeJson(diagnostic, Serial.outgoing) == DeserializationError::Ok &&
+        diagnostic["t"] == "log" && diagnostic["mount_cm"] == 20.0f &&
+        diagnostic["valid"] == 5 && diagnostic["echo_us"][0] == 974 &&
+        diagnostic["echo_us"][1] == 1038 && diagnostic["echo_us"][2] == 1032 &&
+        diagnostic["echo_us"][3] == 1150 && diagnostic["echo_us"][4] == 1148,
+        "web phai nhan du xung ECHO goc theo thu tu va cao lap");
+
+  Serial.outgoing.clear();
+  hal::echoSequence = {0, 1038, 0, 0, 1032};
+  const Status diagnosticStatus = heightMeasure(measuredHeight);
+  CHECK(diagnosticStatus == Status::kNoisy &&
+        deserializeJson(diagnostic, Serial.outgoing) == DeserializationError::Ok &&
+        diagnostic["valid"] == 2 && diagnostic["echo_us"][0] == 0 &&
+        diagnostic["echo_us"][4] == 1032,
+        "van phai gui nhat ky khi khong du mau, giu timeout la 0 us");
+
+  // Mo hinh can vat nho: 200 g va mat can trong van la so do hop le.
+  weightSetCalibration(1000.0f, 10000.0f);
+  hal::hxReady = true;
+  hal::hxRaw = 3000;
+  float measuredWeight = -1.0f;
+  CHECK(isOk(weightMeasure(measuredWeight)) && fabsf(measuredWeight - 0.2f) < 0.001f,
+        "vat nhe 200 g khong duoc bi loai boi nguong do nguoi 2 kg");
+  hal::hxRaw = 1000;
+  CHECK(isOk(weightMeasure(measuredWeight)) && measuredWeight == 0.0f,
+        "mat can trong da tru bi phai hien 0 kg");
+  hal::hxRaw = 0;
+  CHECK(weightMeasure(measuredWeight) == Status::kOutOfRange,
+        "sua can vat nho van phai loai can nang am");
+  hal::hxRaw = 2511000;
+  CHECK(weightMeasure(measuredWeight) == Status::kOutOfRange,
+        "van phai loai can nang vuot 250 kg");
+  hal::hxReady = false;
+  CHECK(weightMeasure(measuredWeight) == Status::kTimeout,
+        "HX711 khong tra loi khong duoc gia thanh so 0 kg");
+  hal::hxReady = true;
+#endif
+  // Lenh WiFi duoc xu ly giua vong lap; millis co the tang truoc khi bat dau do.
+  for (const auto timing : {std::pair<uint32_t, uint32_t>{1000, 1005},
+                            std::pair<uint32_t, uint32_t>{0xfffffffeU, 3}}) {
+    hal::nowMs = timing.first;
+    enterIdle(millis());
+    uartSeenPeer = false;
+    wifiStarted = true;
+    wifiClientCount = 1;
+    wifiSeenPeer = true;
+    wifiLastPeerMs = millis();
+    linkState = LinkState::kWifiActive;
+    g_server.outgoing.clear();
+    g_server.pendingEvent = [timing] {
+      hal::nowMs = timing.second;
+      g_server.receive(WStype_TEXT, "{\"t\":\"measure\"}");
+    };
+    loop();
+    CHECK(state == AppState::kMeasurePpg && stateEnteredMs == timing.second &&
+          g_server.outgoing.find("\"code\":\"TIMEOUT\"") == std::string::npos,
+          "lenh do WiFi khong duoc TIMEOUT ngay, ke ca khi millis tran");
+  }
   printf("Workflow (simulate=%d): %d dat, %d hong\n", SATX_SIMULATE_SENSORS, passed, failed);
   return failed ? 1 : 0;
 }
