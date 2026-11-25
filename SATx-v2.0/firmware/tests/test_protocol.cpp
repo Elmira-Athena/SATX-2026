@@ -51,6 +51,9 @@ int main() {
   CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"weight\",\"known_kg\":5.0}", cmd) &&
         cmd.target == CalibrationTarget::kWeightKnown && fabsf(cmd.value - 5.0f) < 0.001f,
         "cal weight co known_kg -> tinh he so (value=%.3f)\n", cmd.value);
+  CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"weight\",\"scale\":2910.5}", cmd) &&
+        cmd.target == CalibrationTarget::kWeightScale && fabsf(cmd.value - 2910.5f) < 0.01f,
+        "cal weight co scale -> dat truc tiep he so (value=%.3f)\n", cmd.value);
   CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"height\",\"mount_cm\":198.5}", cmd) &&
         cmd.target == CalibrationTarget::kHeightMount && fabsf(cmd.value - 198.5f) < 0.01f,
         "cal height (value=%.3f)\n", cmd.value);

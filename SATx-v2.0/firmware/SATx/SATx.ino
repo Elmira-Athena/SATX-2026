@@ -135,6 +135,11 @@ constexpr uint8_t kSampleCount = 7;    // lay 7 mau, bo 1 max + 1 min, trung bin
 constexpr uint8_t kTrimCount   = 1;    // so mau bi cat o moi dau
 constexpr uint32_t kReadTimeoutMs = 1000;
 
+// Khi tru bi / hieu chuan, doc nhieu mau hon de giam nhieu co hoc.
+constexpr uint8_t kCalibSampleCount = 21;   // lay 21 mau, bo 3 max + 3 min, trung binh 15
+constexpr uint8_t kCalibTrimCount   = 3;
+constexpr uint32_t kCalibReadTimeoutMs = 3000;
+
 // He so quy doi mac dinh (raw tren mot kg) khi chua hieu chuan.
 // Gia tri that nam trong NVS, dat qua {"t":"cal","target":"weight"}.
 constexpr float kDefaultScale = 2852.35f;
@@ -357,7 +362,7 @@ enum class CommandType : uint8_t {
   kEraseStore,
 };
 
-enum class CalibrationTarget : uint8_t { kNone, kWeightTare, kWeightKnown, kHeightMount };
+enum class CalibrationTarget : uint8_t { kNone, kWeightTare, kWeightKnown, kWeightScale, kHeightMount };
 
 struct Command {
   CommandType       type   = CommandType::kUnknown;
@@ -558,7 +563,10 @@ Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut);
 Status heightMeasure(float& heightCmOut);
 void weightBegin();
 void weightSetCalibration(float offset, float scale);
-Status weightReadFilteredRaw(float& rawOut);
+Status weightReadFilteredRaw(float& rawOut,
+                             uint8_t sampleCount = cfg::weight::kSampleCount,
+                             uint8_t trimCount = cfg::weight::kTrimCount,
+                             uint32_t timeoutMs = cfg::weight::kReadTimeoutMs);
 Status weightMeasure(float& weightKgOut);
 Status weightTare();
 Status weightCalibrateWith(float knownKg);
@@ -924,6 +932,14 @@ void handleCalibration(const Command& command) {
       status = weightCalibrateWith(command.value);
       if (isOk(status)) {
         settingsSetWeightCalibration(weightOffset, weightScale);
+      }
+      break;
+
+    case CalibrationTarget::kWeightScale:
+      if (command.value > 0.0f) {
+        weightSetCalibration(weightOffset, command.value);
+        settingsSetWeightCalibration(weightOffset, weightScale);
+        status = Status::kOk;
       }
       break;
 
@@ -1371,17 +1387,26 @@ void weightSetCalibration(float offset, float scale) {
   if (scale != 0.0f) weightScale = scale;
 }
 
-Status weightReadFilteredRaw(float& rawOut) {
+Status weightReadFilteredRaw(float& rawOut,
+                             uint8_t sampleCount,
+                             uint8_t trimCount,
+                             uint32_t timeoutMs) {
 #if SATX_SIMULATE_SENSORS
+  (void)sampleCount;
+  (void)trimCount;
+  (void)timeoutMs;
   delay(150);
   rawOut = weightOffset + weightScale * (52.0f + static_cast<float>(millis() % 250) / 10.0f);
   return Status::kOk;
 #else
-  float samples[cfg::weight::kSampleCount];
+  if (sampleCount > cfg::weight::kCalibSampleCount) {
+    sampleCount = cfg::weight::kCalibSampleCount;
+  }
+  float samples[cfg::weight::kCalibSampleCount];
   uint8_t valid = 0;
 
-  const uint32_t deadline = millis() + cfg::weight::kReadTimeoutMs;
-  while (valid < cfg::weight::kSampleCount) {
+  const uint32_t deadline = millis() + timeoutMs;
+  while (valid < sampleCount) {
     if (static_cast<int32_t>(millis() - deadline) >= 0) break;
     if (!g_hx711.is_ready()) {
       delay(1);
@@ -1391,13 +1416,13 @@ Status weightReadFilteredRaw(float& rawOut) {
   }
 
   // Can du mau de con lai it nhat mot mau sau khi cat hai dau.
-  if (valid < (2 * cfg::weight::kTrimCount + 1)) return Status::kTimeout;
+  if (valid < (2 * trimCount + 1)) return Status::kTimeout;
 
   sortAscending(samples, valid);
 
   float sum = 0.0f;
-  const uint8_t first = cfg::weight::kTrimCount;
-  const uint8_t last  = static_cast<uint8_t>(valid - cfg::weight::kTrimCount);
+  const uint8_t first = trimCount;
+  const uint8_t last  = static_cast<uint8_t>(valid - trimCount);
   for (uint8_t i = first; i < last; ++i) sum += samples[i];
 
   rawOut = sum / static_cast<float>(last - first);
@@ -1421,7 +1446,10 @@ Status weightMeasure(float& weightKgOut) {
 
 Status weightTare() {
   float raw = 0.0f;
-  const Status status = weightReadFilteredRaw(raw);
+  const Status status = weightReadFilteredRaw(raw,
+                                              cfg::weight::kCalibSampleCount,
+                                              cfg::weight::kCalibTrimCount,
+                                              cfg::weight::kCalibReadTimeoutMs);
   if (!isOk(status)) return status;
   weightOffset = raw;
   return Status::kOk;
@@ -1431,7 +1459,10 @@ Status weightCalibrateWith(float knownKg) {
   if (knownKg <= 0.0f) return Status::kInvalidArg;
 
   float raw = 0.0f;
-  const Status status = weightReadFilteredRaw(raw);
+  const Status status = weightReadFilteredRaw(raw,
+                                              cfg::weight::kCalibSampleCount,
+                                              cfg::weight::kCalibTrimCount,
+                                              cfg::weight::kCalibReadTimeoutMs);
   if (!isOk(status)) return status;
 
   const float delta = raw - weightOffset;
@@ -1856,8 +1887,11 @@ bool parseCommand(const char* line, Command& commandOut) {
     case CommandType::kCalibrate: {
       const char* target = doc["target"] | "";
       if (strcmp(target, "weight") == 0) {
-        // Co known_kg -> tinh he so; khong co -> chi tare.
-        if (doc["known_kg"].is<float>()) {
+        // Co scale -> dat truc tiep he so da hoi quy; co known_kg -> tinh 1 diem; khong -> tare.
+        if (doc["scale"].is<float>()) {
+          commandOut.target = CalibrationTarget::kWeightScale;
+          commandOut.value  = doc["scale"] | 0.0f;
+        } else if (doc["known_kg"].is<float>()) {
           commandOut.target = CalibrationTarget::kWeightKnown;
           commandOut.value  = doc["known_kg"] | 0.0f;
         } else {

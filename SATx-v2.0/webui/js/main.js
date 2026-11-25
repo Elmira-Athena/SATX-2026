@@ -21,6 +21,53 @@ import { readingTime, clockLabel } from './ui/format.js';
 
 const $ = (id) => document.getElementById(id);
 
+// Hieu chuan can 5 mau (hoi quy tuyen tinh qua goc sau khi tru bi).
+const CAL_SAMPLE_TARGET = 5;
+let calSamples = [];
+let pendingCalKg = null;
+
+function renderCalSamples() {
+  const countEl = $('calMultiCount');
+  const listEl = $('calMultiList');
+  const btnEl = $('btnCalSample');
+  if (!countEl || !listEl || !btnEl) return;
+
+  countEl.textContent = `${calSamples.length}/${CAL_SAMPLE_TARGET}`;
+  btnEl.textContent = calSamples.length >= CAL_SAMPLE_TARGET
+    ? 'Lấy lại (1/5)'
+    : `Lấy mẫu (${calSamples.length + 1}/${CAL_SAMPLE_TARGET})`;
+
+  if (calSamples.length === 0) {
+    listEl.textContent = 'Chưa có mẫu — Trừ bì trước, rồi đặt lần lượt 5 mức cân vào ô Quả cân chuẩn và bấm Lấy mẫu.';
+  } else {
+    listEl.textContent = calSamples
+      .map((s, i) => `#${i + 1}: ${s.kg} kg → ${s.scale.toFixed(2)}`)
+      .join(' | ');
+  }
+}
+
+function recordCalSample(kg, scale) {
+  calSamples.push({ kg, scale });
+  renderCalSamples();
+
+  if (calSamples.length < CAL_SAMPLE_TARGET) {
+    toast(`Đã lưu mẫu ${calSamples.length}/${CAL_SAMPLE_TARGET} (${kg} kg → ${scale})`);
+    return;
+  }
+
+  // Hoi quy tuyen tinh qua goc: scale = sum(m^2 * s) / sum(m^2)
+  let num = 0;
+  let den = 0;
+  for (const s of calSamples) {
+    num += s.kg * s.kg * s.scale;
+    den += s.kg * s.kg;
+  }
+  const finalScale = Number((num / den).toFixed(2));
+  link.send(Cmd.setWeightScale(finalScale));
+  log(`Hiệu chuẩn 5 mẫu hoàn tất → hệ số tối ưu: ${finalScale}`, 'ok');
+  toast(`Hoàn tất 5 mẫu! Hệ số mới: ${finalScale}`, 'ok');
+}
+
 // -----------------------------------------------------------------------------
 //  Thong bao noi
 // -----------------------------------------------------------------------------
@@ -78,6 +125,11 @@ function handleMessage(message) {
           ['', 'satx.local'].includes($('wifiHost').value.trim())) {
         $('wifiHost').value = message.ip;
         link.setWifiConfig(message.ip, 81);
+      }
+      if (pendingCalKg !== null && typeof message.w_scale === 'number') {
+        const kg = pendingCalKg;
+        pendingCalKg = null;
+        recordCalSample(kg, message.w_scale);
       }
       break;
 
@@ -301,12 +353,32 @@ function bindSettings() {
     await connect('wifi');
   });
 
-  $('btnTare').addEventListener('click', () => { link.send(Cmd.tare()); toast('Đã gửi lệnh trừ bì'); });
+  $('btnTare').addEventListener('click', () => {
+    calSamples = [];
+    pendingCalKg = null;
+    renderCalSamples();
+    link.send(Cmd.tare());
+    toast('Đã gửi lệnh trừ bì');
+  });
   $('btnCalWeight').addEventListener('click', () => {
     const kg = Number($('calKnownKg').value.replace(',', '.'));
     if (!(kg > 0)) { toast('Khối lượng quả cân phải lớn hơn 0', 'warn'); return; }
     link.send(Cmd.calWeight(kg));
     toast(`Đặt hệ số cân theo quả chuẩn ${kg} kg`);
+  });
+  $('btnCalSample').addEventListener('click', () => {
+    const kg = Number($('calKnownKg').value.replace(',', '.'));
+    if (!(kg > 0)) { toast('Khối lượng quả cân phải lớn hơn 0', 'warn'); return; }
+    if (calSamples.length >= 5) calSamples = [];
+    pendingCalKg = kg;
+    link.send(Cmd.calWeight(kg));
+    toast(`Đang lấy mẫu ${calSamples.length + 1}/5 (${kg} kg)...`);
+  });
+  $('btnCalClear').addEventListener('click', () => {
+    calSamples = [];
+    pendingCalKg = null;
+    renderCalSamples();
+    toast('Đã xoá danh sách mẫu hiệu chuẩn');
   });
   $('btnCalHeight').addEventListener('click', () => {
     const cm = Number($('calMountCm').value.replace(',', '.'));

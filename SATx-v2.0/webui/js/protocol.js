@@ -14,6 +14,7 @@ export const Cmd = {
   flush:   ()               => ({ t: 'flush' }),
   tare:    ()               => ({ t: 'cal', target: 'weight' }),
   calWeight: (knownKg)      => ({ t: 'cal', target: 'weight', known_kg: knownKg }),
+  setWeightScale: (scale)   => ({ t: 'cal', target: 'weight', scale }),
   calHeight: (mountCm)      => ({ t: 'cal', target: 'height', mount_cm: mountCm }),
   wifi:    (ssid, pass)     => ({ t: 'cfg', wifi: { ssid, pass } }),
   erase:   (physical=false) => ({ t: 'erase', physical }),

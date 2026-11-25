@@ -22,6 +22,8 @@ export class MockTransport {
   #dropped = false;     // dang gia lap mat ket noi
   #epochOffset = 0;
   #uptimeSec = 0;
+  #mockScale = 2852.35;
+  #mockMountCm = 200.0;
 
   constructor({ onLine }) { this.#onLine = onLine; }
 
@@ -104,6 +106,21 @@ export class MockTransport {
       case 'reset': this.#emit({ t: 'state', s: 'idle', step: 'none', pct: 0, eta: 0 }); break;
       case 'flush': this.simulateReconnect(); break;
       case 'erase': this.#buffered = []; break;
+      case 'cal':
+        if (message.target === 'weight') {
+          if (typeof message.scale === 'number' && message.scale > 0) {
+            this.#mockScale = message.scale;
+          } else if (typeof message.known_kg === 'number' && message.known_kg > 0) {
+            this.#mockScale = Number((this.#mockScale * (0.992 + Math.random() * 0.016)).toFixed(2));
+          }
+        } else if (message.target === 'height' && typeof message.mount_cm === 'number' && message.mount_cm > 0) {
+          this.#mockMountCm = message.mount_cm;
+        }
+        this.#emit({
+          t: 'info', link: 'mock', ip: '192.168.1.63', pending: this.#buffered.length,
+          mount_cm: this.#mockMountCm, w_scale: this.#mockScale, fw: 'SATx-2.0-mock',
+        });
+        break;
       default: break;
     }
   }
