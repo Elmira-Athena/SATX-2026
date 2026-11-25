@@ -1328,6 +1328,42 @@ Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut) {
   return Status::kOk;
 }
 
+Status heightCollectSamples(float* samplesOut, uint8_t count, uint8_t& validOut, const char* label) {
+  uint32_t echoUs[cfg::height::kCalibSampleCount] = {};
+  validOut = 0;
+
+  for (uint8_t i = 0; i < count; ++i) {
+    float cm = 0.0f;
+    if (isOk(heightReadDistanceOnce(cm, echoUs[i]))) samplesOut[validOut++] = cm;
+    delay(cfg::height::kSampleGapMs);
+  }
+
+  // Gui ca mau hong truoc khi loc, de phan biet timeout va dao dong ECHO tren web.
+  JsonDocument diagnostic;
+  diagnostic["t"] = "log";
+  diagnostic["lvl"] = "info";
+  diagnostic["sensor"] = "height";
+  diagnostic["mount_cm"] = heightMountHeightCm;
+  diagnostic["valid"] = validOut;
+  JsonArray pulses = diagnostic["echo_us"].to<JsonArray>();
+  for (uint8_t i = 0; i < count; ++i) pulses.add(echoUs[i]);
+  char pulseText[120];
+  serializeJson(pulses, pulseText, sizeof(pulseText));
+  char detail[220];
+  snprintf(detail, sizeof(detail), "HC-SR04 %s mount=%.2f cm; echo_us=%s; valid=%u/%u",
+           label, heightMountHeightCm, pulseText,
+           static_cast<unsigned>(validOut), static_cast<unsigned>(count));
+  diagnostic["msg"] = detail;
+  const size_t length = serializeJson(diagnostic, g_outBuffer, sizeof(g_outBuffer) - 2);
+  if (length > 0 && length < sizeof(g_outBuffer) - 2) {
+    g_outBuffer[length] = '\n';
+    g_outBuffer[length + 1] = '\0';
+    linkSend(g_outBuffer);
+  }
+
+  return (validOut >= (count / 2 + 1)) ? Status::kOk : Status::kNoisy;
+}
+
 Status heightMeasure(float& heightCmOut) {
 #if SATX_SIMULATE_SENSORS
   const float simHeight = (heightMountHeightCm <= 30.0f)
@@ -1339,40 +1375,9 @@ Status heightMeasure(float& heightCmOut) {
   return Status::kOk;
 #else
   float samples[cfg::height::kSampleCount];
-  uint32_t echoUs[cfg::height::kSampleCount] = {};
   uint8_t valid = 0;
-
-  for (uint8_t i = 0; i < cfg::height::kSampleCount; ++i) {
-    float cm = 0.0f;
-    if (isOk(heightReadDistanceOnce(cm, echoUs[i]))) samples[valid++] = cm;
-    delay(cfg::height::kSampleGapMs);
-  }
-
-  // Gui ca mau hong truoc khi loc, de phan biet timeout va dao dong ECHO tren web.
-  JsonDocument diagnostic;
-  diagnostic["t"] = "log";
-  diagnostic["lvl"] = "info";
-  diagnostic["sensor"] = "height";
-  diagnostic["mount_cm"] = heightMountHeightCm;
-  diagnostic["valid"] = valid;
-  JsonArray pulses = diagnostic["echo_us"].to<JsonArray>();
-  for (uint8_t i = 0; i < cfg::height::kSampleCount; ++i) pulses.add(echoUs[i]);
-  char pulseText[80];
-  serializeJson(pulses, pulseText, sizeof(pulseText));
-  char detail[192];
-  snprintf(detail, sizeof(detail), "HC-SR04 mount=%.2f cm; echo_us=%s; valid=%u/%u",
-           heightMountHeightCm, pulseText, static_cast<unsigned>(valid),
-           static_cast<unsigned>(cfg::height::kSampleCount));
-  diagnostic["msg"] = detail;
-  const size_t length = serializeJson(diagnostic, g_outBuffer, sizeof(g_outBuffer) - 2);
-  if (length > 0 && length < sizeof(g_outBuffer) - 2) {
-    g_outBuffer[length] = '\n';
-    g_outBuffer[length + 1] = '\0';
-    linkSend(g_outBuffer);
-  }
-
-  // Can qua nua so mau hop le thi ket qua moi dang tin.
-  if (valid < (cfg::height::kSampleCount / 2 + 1)) return Status::kNoisy;
+  const Status status = heightCollectSamples(samples, cfg::height::kSampleCount, valid, "measure");
+  if (!isOk(status)) return status;
 
   // Trung vi khu duoc mau ngoai lai do nguoi dich chuyen, tot hon trung binh.
   sortAscending(samples, valid);
@@ -1395,15 +1400,8 @@ Status heightCalibrateWith(float knownCm) {
 #else
   float samples[cfg::height::kCalibSampleCount];
   uint8_t valid = 0;
-  uint32_t echoUs = 0;
-
-  for (uint8_t i = 0; i < cfg::height::kCalibSampleCount; ++i) {
-    float cm = 0.0f;
-    if (isOk(heightReadDistanceOnce(cm, echoUs))) samples[valid++] = cm;
-    delay(cfg::height::kSampleGapMs);
-  }
-
-  if (valid < (cfg::height::kCalibSampleCount / 2 + 1)) return Status::kNoisy;
+  const Status status = heightCollectSamples(samples, cfg::height::kCalibSampleCount, valid, "cal");
+  if (!isOk(status)) return status;
 
   sortAscending(samples, valid);
   const float distCm = samples[valid / 2];
