@@ -16,6 +16,7 @@ export const Cmd = {
   calWeight: (knownKg)      => ({ t: 'cal', target: 'weight', known_kg: knownKg }),
   setWeightScale: (scale)   => ({ t: 'cal', target: 'weight', scale }),
   calHeight: (mountCm)      => ({ t: 'cal', target: 'height', mount_cm: mountCm }),
+  calHeightKnown: (knownCm=0) => ({ t: 'cal', target: 'height', known_cm: knownCm }),
   wifi:    (ssid, pass)     => ({ t: 'cfg', wifi: { ssid, pass } }),
   erase:   (physical=false) => ({ t: 'erase', physical }),
 };

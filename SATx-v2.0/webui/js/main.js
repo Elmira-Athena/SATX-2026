@@ -68,6 +68,45 @@ function recordCalSample(kg, scale) {
   toast(`Hoàn tất 5 mẫu! Hệ số mới: ${finalScale}`, 'ok');
 }
 
+// Hieu chuan chieu cao 5 mau: trung binh mount_cm = distance + known_cm.
+let heightSamples = [];
+let pendingHeightKnownCm = null;
+
+function renderHeightSamples() {
+  const countEl = $('calHeightMultiCount');
+  const listEl = $('calHeightMultiList');
+  const btnEl = $('btnHeightSample');
+  if (!countEl || !listEl || !btnEl) return;
+
+  countEl.textContent = `${heightSamples.length}/${CAL_SAMPLE_TARGET}`;
+  btnEl.textContent = heightSamples.length >= CAL_SAMPLE_TARGET
+    ? 'Lấy lại (1/5)'
+    : `Lấy mẫu cao (${heightSamples.length + 1}/${CAL_SAMPLE_TARGET})`;
+
+  if (heightSamples.length === 0) {
+    listEl.textContent = 'Chưa có mẫu — Đặt vật cao đã biết (hoặc để trống = 0 cm) và bấm Lấy mẫu cao.';
+  } else {
+    listEl.textContent = heightSamples
+      .map((s, i) => `#${i + 1}: vật ${s.knownCm} cm → cao lắp ${s.mountCm.toFixed(2)} cm`)
+      .join(' | ');
+  }
+}
+
+function recordHeightSample(knownCm, mountCm) {
+  heightSamples.push({ knownCm, mountCm });
+  renderHeightSamples();
+
+  if (heightSamples.length < CAL_SAMPLE_TARGET) {
+    toast(`Đã lưu mẫu cao ${heightSamples.length}/${CAL_SAMPLE_TARGET} (cao lắp: ${mountCm.toFixed(2)} cm)`);
+    return;
+  }
+
+  const avgMount = Number((heightSamples.reduce((sum, s) => sum + s.mountCm, 0) / CAL_SAMPLE_TARGET).toFixed(2));
+  link.send(Cmd.calHeight(avgMount));
+  log(`Hiệu chuẩn chiều cao 5 mẫu hoàn tất → cao lắp: ${avgMount} cm`, 'ok');
+  toast(`Hoàn tất 5 mẫu! Cao lắp mới: ${avgMount} cm`, 'ok');
+}
+
 // -----------------------------------------------------------------------------
 //  Thong bao noi
 // -----------------------------------------------------------------------------
@@ -130,6 +169,11 @@ function handleMessage(message) {
         const kg = pendingCalKg;
         pendingCalKg = null;
         recordCalSample(kg, message.w_scale);
+      }
+      if (pendingHeightKnownCm !== null && typeof message.mount_cm === 'number') {
+        const knownCm = pendingHeightKnownCm;
+        pendingHeightKnownCm = null;
+        recordHeightSample(knownCm, message.mount_cm);
       }
       break;
 
@@ -385,6 +429,27 @@ function bindSettings() {
     if (!(cm > 0)) { toast('Chiều cao lắp phải lớn hơn 0', 'warn'); return; }
     link.send(Cmd.calHeight(cm));
     toast(`Đặt chiều cao lắp cảm biến ${cm} cm`);
+  });
+  $('btnHeightZero').addEventListener('click', () => {
+    heightSamples = [];
+    pendingHeightKnownCm = null;
+    renderHeightSamples();
+    link.send(Cmd.calHeightKnown(0));
+    toast('Đang đo chuẩn 0 cm (mặt cân trống)...');
+  });
+  $('btnHeightSample').addEventListener('click', () => {
+    const knownCm = Number($('calKnownCm').value.replace(',', '.'));
+    if (Number.isNaN(knownCm) || knownCm < 0) { toast('Chiều cao vật chuẩn phải >= 0 cm', 'warn'); return; }
+    if (heightSamples.length >= CAL_SAMPLE_TARGET) heightSamples = [];
+    pendingHeightKnownCm = knownCm;
+    link.send(Cmd.calHeightKnown(knownCm));
+    toast(`Đang lấy mẫu cao ${heightSamples.length + 1}/5 (vật ${knownCm} cm)...`);
+  });
+  $('btnHeightClear').addEventListener('click', () => {
+    heightSamples = [];
+    pendingHeightKnownCm = null;
+    renderHeightSamples();
+    toast('Đã xoá danh sách mẫu chiều cao');
   });
 
   $('btnErase').addEventListener('click', () => {

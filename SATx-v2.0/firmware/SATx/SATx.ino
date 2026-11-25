@@ -107,6 +107,7 @@ constexpr int  kEchoActiveLevel = 0;      // 1 = HIGH, 0 = LOW
 constexpr uint32_t kTrigPulseUs    = 10;      // do rong xung kich theo datasheet
 constexpr uint32_t kEchoTimeoutUs  = 30000;   // 30 ms ~ 5 m, du xa
 constexpr uint8_t  kSampleCount    = 5;       // lay 5 mau roi loc trung vi
+constexpr uint8_t  kCalibSampleCount = 15;    // lay 15 mau khi hieu chuan chieu cao
 constexpr uint32_t kSampleGapMs    = 60;      // >= 60 ms de tranh vong doi am
 
 // Nguong hop le cua khoang cach tho (cm) — ngoai khoang nay coi la mau hong
@@ -362,7 +363,7 @@ enum class CommandType : uint8_t {
   kEraseStore,
 };
 
-enum class CalibrationTarget : uint8_t { kNone, kWeightTare, kWeightKnown, kWeightScale, kHeightMount };
+enum class CalibrationTarget : uint8_t { kNone, kWeightTare, kWeightKnown, kWeightScale, kHeightMount, kHeightKnown };
 
 struct Command {
   CommandType       type   = CommandType::kUnknown;
@@ -561,6 +562,7 @@ void sortAscending(float* values, uint8_t count);
 void heightBegin();
 Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut);
 Status heightMeasure(float& heightCmOut);
+Status heightCalibrateWith(float knownCm);
 void weightBegin();
 void weightSetCalibration(float offset, float scale);
 Status weightReadFilteredRaw(float& rawOut,
@@ -951,6 +953,13 @@ void handleCalibration(const Command& command) {
       }
       break;
 
+    case CalibrationTarget::kHeightKnown:
+      status = heightCalibrateWith(command.value);
+      if (isOk(status)) {
+        settingsSetMountHeightCm(heightMountHeightCm);
+      }
+      break;
+
     default:
       break;
   }
@@ -1321,8 +1330,11 @@ Status heightReadDistanceOnce(float& distanceCmOut, uint32_t& echoUsOut) {
 
 Status heightMeasure(float& heightCmOut) {
 #if SATX_SIMULATE_SENSORS
-  heightLastDistanceCm = heightMountHeightCm - (158.0f + static_cast<float>(millis() % 300) / 10.0f);
-  heightCmOut     = heightMountHeightCm - heightLastDistanceCm;
+  const float simHeight = (heightMountHeightCm <= 30.0f)
+      ? (3.0f + static_cast<float>(millis() % 120) / 10.0f)
+      : (158.0f + static_cast<float>(millis() % 300) / 10.0f);
+  heightLastDistanceCm = heightMountHeightCm - simHeight;
+  heightCmOut     = simHeight;
   delay(200);   // giu dung nhip thoi gian nhu khi do that
   return Status::kOk;
 #else
@@ -1370,6 +1382,35 @@ Status heightMeasure(float& heightCmOut) {
   if (height < cfg::height::kMinHeightCm || height > cfg::height::kMaxHeightCm) return Status::kOutOfRange;
 
   heightCmOut = height;
+  return Status::kOk;
+#endif
+}
+
+Status heightCalibrateWith(float knownCm) {
+  if (knownCm < 0.0f) return Status::kInvalidArg;
+#if SATX_SIMULATE_SENSORS
+  delay(200);
+  heightMountHeightCm = cfg::height::kDefaultMountHeightCm;
+  return Status::kOk;
+#else
+  float samples[cfg::height::kCalibSampleCount];
+  uint8_t valid = 0;
+  uint32_t echoUs = 0;
+
+  for (uint8_t i = 0; i < cfg::height::kCalibSampleCount; ++i) {
+    float cm = 0.0f;
+    if (isOk(heightReadDistanceOnce(cm, echoUs))) samples[valid++] = cm;
+    delay(cfg::height::kSampleGapMs);
+  }
+
+  if (valid < (cfg::height::kCalibSampleCount / 2 + 1)) return Status::kNoisy;
+
+  sortAscending(samples, valid);
+  const float distCm = samples[valid / 2];
+  const float mountCm = distCm + knownCm;
+  if (mountCm <= 0.0f || mountCm > cfg::height::kMaxDistanceCm) return Status::kOutOfRange;
+
+  heightMountHeightCm = mountCm;
   return Status::kOk;
 #endif
 }
@@ -1898,8 +1939,13 @@ bool parseCommand(const char* line, Command& commandOut) {
           commandOut.target = CalibrationTarget::kWeightTare;
         }
       } else if (strcmp(target, "height") == 0) {
-        commandOut.target = CalibrationTarget::kHeightMount;
-        commandOut.value  = doc["mount_cm"] | 0.0f;
+        if (doc["mount_cm"].is<float>()) {
+          commandOut.target = CalibrationTarget::kHeightMount;
+          commandOut.value  = doc["mount_cm"] | 0.0f;
+        } else {
+          commandOut.target = CalibrationTarget::kHeightKnown;
+          commandOut.value  = doc["known_cm"] | 0.0f;
+        }
       }
       break;
     }

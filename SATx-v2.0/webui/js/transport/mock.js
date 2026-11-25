@@ -23,7 +23,7 @@ export class MockTransport {
   #epochOffset = 0;
   #uptimeSec = 0;
   #mockScale = 2852.35;
-  #mockMountCm = 200.0;
+  #mockMountCm = 20.0;
 
   constructor({ onLine }) { this.#onLine = onLine; }
 
@@ -113,8 +113,12 @@ export class MockTransport {
           } else if (typeof message.known_kg === 'number' && message.known_kg > 0) {
             this.#mockScale = Number((this.#mockScale * (0.992 + Math.random() * 0.016)).toFixed(2));
           }
-        } else if (message.target === 'height' && typeof message.mount_cm === 'number' && message.mount_cm > 0) {
-          this.#mockMountCm = message.mount_cm;
+        } else if (message.target === 'height') {
+          if (typeof message.mount_cm === 'number' && message.mount_cm > 0) {
+            this.#mockMountCm = message.mount_cm;
+          } else {
+            this.#mockMountCm = Number((20.0 + (Math.random() - 0.5) * 0.4).toFixed(2));
+          }
         }
         this.#emit({
           t: 'info', link: 'mock', ip: '192.168.1.63', pending: this.#buffered.length,

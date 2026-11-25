@@ -57,6 +57,12 @@ int main() {
   CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"height\",\"mount_cm\":198.5}", cmd) &&
         cmd.target == CalibrationTarget::kHeightMount && fabsf(cmd.value - 198.5f) < 0.01f,
         "cal height (value=%.3f)\n", cmd.value);
+  CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"height\"}", cmd) &&
+        cmd.target == CalibrationTarget::kHeightKnown && fabsf(cmd.value - 0.0f) < 0.001f,
+        "cal height khong co mount_cm -> chuan 0 cm\n");
+  CHECK(parseCommand("{\"t\":\"cal\",\"target\":\"height\",\"known_cm\":5.0}", cmd) &&
+        cmd.target == CalibrationTarget::kHeightKnown && fabsf(cmd.value - 5.0f) < 0.001f,
+        "cal height co known_cm -> do cao lap theo vat chuan (value=%.3f)\n", cmd.value);
   printf("4. Lenh hieu chuan ......................... xong\n");
 
   // --- 5. Cau hinh WiFi ---------------------------------------------------
